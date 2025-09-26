@@ -1,0 +1,103 @@
+# Python bytecode and caches (파이썬 바이트코드/캐시)
+__pycache__/
+*.py[cod]
+*$py.class
+
+# C extensions (C 확장 모듈)
+*.so
+
+# Build and packaging (빌드/배포 산출물)
+.build/
+build/
+dist/
+wheels/
+.eggs/
+*.egg-info/
+*.egg
+MANIFEST
+
+# Virtual environments (가상환경)
+.venv/
+venv/
+ENV/
+env/
+
+# Installer metadata (설치 메타데이터)
+pip-wheel-metadata/
+
+# Unit test / coverage reports (테스트/커버리지 산출물)
+.pytest_cache/
+.coverage
+.coverage.*
+htmlcov/
+.tox/
+.nox/
+coverage.xml
+
+# Type checker caches (타입체커 캐시)
+.mypy_cache/
+.pytype/
+.pyre/
+.pyrightcache/
+.ruff_cache/
+
+# Logs and runtime files (로그/런타임 파일)
+*.log
+*.pid
+*.tmp
+*.bak
+
+# Environment variables (환경 변수 파일)
+.env
+.env.*
+*.env
+
+# Jupyter (주피터 노트북)
+.ipynb_checkpoints/
+
+# IDE/editor (IDE/에디터 설정)
+.vscode/
+.idea/
+
+# OS (운영체제 생성 파일)
+.DS_Store
+Thumbs.db
+
+# Node (노드 의존성)
+node_modules/
+**/node_modules/
+
+# VS Code extension outputs (VS 코드 확장 빌드 산출물)
+vscode-extension/out/
+vscode-extension/*.vsix
+
+# Archives and large artifacts (압축/대용량 산출물)
+*.zip
+*.tar.gz
+*.tgz
+
+# Project-specific (프로젝트 전용 예외)
+server/uploads/
+python-server/uploads/
+server/security_analysis.db
+security_analysis.db
+vscode-extension/node_modules/
+# *.db  # (선택) 모든 DB 파일 제외 시 사용
+server/logs/
+
+# Optional: large ML artifacts (선택: 대용량 ML 산출물 제외 시 사용)
+# **/*.pkl
+# **/*.npy
+# **/*.safetensors
+# **/training_args.bin
+# 아래는 실제 대용량 파일 개별 제외 (이미 존재하므로 명시 유지)
+codebert_mal/model/codebert/model.safetensors
+codebert_test2/model/codebert/model.safetensors
+server/models/codebert/codebert/model.safetensors
+unified/plated-mantis-471407-m4-b14f1b3e761d.json
+
+# Extracted sources from ZIPs (do not commit extracted directories)
+codebert_test2/source/**
+safepy_3/source/**
+safepy_3_malicious/source/**
+codebert_mal/source/**

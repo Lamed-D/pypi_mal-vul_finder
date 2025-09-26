@@ -1,0 +1,338 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Python Security Analysis Dashboard</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        .upload-area {
+            border: 2px dashed #007bff;
+            border-radius: 10px;
+            padding: 40px;
+            text-align: center;
+            background-color: #f8f9fa;
+            transition: all 0.3s ease;
+        }
+        .upload-area:hover {
+            border-color: #0056b3;
+            background-color: #e9ecef;
+        }
+        .upload-area.dragover {
+            border-color: #28a745;
+            background-color: #d4edda;
+        }
+        .stat-card {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border-radius: 10px;
+            padding: 20px;
+            margin-bottom: 20px;
+        }
+        .stat-card.danger {
+            background: linear-gradient(135deg, #ff6b6b 0%, #ee5a24 100%);
+        }
+        .stat-card.warning {
+            background: linear-gradient(135deg, #feca57 0%, #ff9ff3 100%);
+        }
+        .stat-card.success {
+            background: linear-gradient(135deg, #48dbfb 0%, #0abde3 100%);
+        }
+        .file-item {
+            border-left: 4px solid #007bff;
+            padding: 10px;
+            margin: 5px 0;
+            background-color: #f8f9fa;
+            border-radius: 0 5px 5px 0;
+        }
+        .file-item.malicious {
+            border-left-color: #dc3545;
+            background-color: #f8d7da;
+        }
+        .file-item.vulnerable {
+            border-left-color: #ffc107;
+            background-color: #fff3cd;
+        }
+        .file-item.safe {
+            border-left-color: #28a745;
+            background-color: #d4edda;
+        }
+    </style>
+</head>
+<body>
+    <nav class="navbar navbar-expand-lg navbar-dark bg-dark">
+        <div class="container">
+            <a class="navbar-brand" href="#">
+                <i class="fas fa-shield-alt"></i> Python Security Analysis
+            </a>
+            <div class="navbar-nav ms-auto">
+                <span class="navbar-text">
+                    <i class="fas fa-clock"></i> <span id="current-time"></span>
+                </span>
+            </div>
+        </div>
+    </nav>
+
+    <div class="container mt-4">
+        <!-- Statistics Cards -->
+        <div class="row mb-4">
+            <div class="col-md-3">
+                <div class="stat-card">
+                    <h3>{{ stats.total_sessions }}</h3>
+                    <p><i class="fas fa-upload"></i> Total Sessions</p>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="stat-card success">
+                    <h3>{{ stats.total_files }}</h3>
+                    <p><i class="fas fa-file-code"></i> Total Files</p>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="stat-card danger">
+                    <h3>{{ stats.malicious_files }}</h3>
+                    <p><i class="fas fa-virus"></i> Malicious Files</p>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="stat-card warning">
+                    <h3>{{ stats.vulnerable_files }}</h3>
+                    <p><i class="fas fa-exclamation-triangle"></i> Vulnerable Files</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Upload Section -->
+        <div class="row mb-4">
+            <div class="col-12">
+                <div class="card">
+                    <div class="card-header">
+                        <h5><i class="fas fa-upload"></i> Upload ZIP File for Analysis</h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="upload-area" id="uploadArea">
+                            <i class="fas fa-cloud-upload-alt fa-3x mb-3"></i>
+                            <h5>Drag & Drop ZIP file here</h5>
+                            <p>or click to select file</p>
+                            <input type="file" id="fileInput" accept=".zip" style="display: none;">
+                        </div>
+                        <div id="uploadProgress" class="mt-3" style="display: none;">
+                            <div class="progress">
+                                <div class="progress-bar" role="progressbar" style="width: 0%"></div>
+                            </div>
+                            <p class="mt-2" id="uploadStatus">Uploading...</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Analysis Results -->
+        <div class="row">
+            <div class="col-md-8">
+                <div class="card">
+                    <div class="card-header">
+                        <h5><i class="fas fa-history"></i> Recent Analysis Sessions</h5>
+                    </div>
+                    <div class="card-body">
+                        <div id="sessionsList">
+                            {% for session in recent_sessions %}
+                            <div class="file-item">
+                                <div class="d-flex justify-content-between align-items-center">
+                                    <div>
+                                        <h6>{{ session.filename }}</h6>
+                                        <small class="text-muted">
+                                            <i class="fas fa-clock"></i> {{ session.upload_time.strftime('%Y-%m-%d %H:%M:%S') }}
+                                            <span class="badge bg-{{ 'success' if session.status == 'completed' else 'warning' if session.status == 'processing' else 'danger' }}">
+                                                {{ session.status }}
+                                            </span>
+                                        </small>
+                                    </div>
+                                    <div>
+                                        <button class="btn btn-sm btn-outline-primary" onclick="viewSession('{{ session.session_id }}')">
+                                            <i class="fas fa-eye"></i> View
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                            {% endfor %}
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-4">
+                <div class="card">
+                    <div class="card-header">
+                        <h5><i class="fas fa-chart-pie"></i> Analysis Overview</h5>
+                    </div>
+                    <div class="card-body">
+                        <canvas id="analysisChart" width="400" height="400"></canvas>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Session Details Modal -->
+    <div class="modal fade" id="sessionModal" tabindex="-1">
+        <div class="modal-dialog modal-lg">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">Analysis Session Details</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body" id="sessionDetails">
+                    <!-- Session details will be loaded here -->
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        // Update current time
+        function updateTime() {
+            const now = new Date();
+            document.getElementById('current-time').textContent = now.toLocaleString();
+        }
+        setInterval(updateTime, 1000);
+        updateTime();
+
+        // File upload handling
+        const uploadArea = document.getElementById('uploadArea');
+        const fileInput = document.getElementById('fileInput');
+        const uploadProgress = document.getElementById('uploadProgress');
+        const uploadStatus = document.getElementById('uploadStatus');
+
+        uploadArea.addEventListener('click', () => fileInput.click());
+        uploadArea.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            uploadArea.classList.add('dragover');
+        });
+        uploadArea.addEventListener('dragleave', () => {
+            uploadArea.classList.remove('dragover');
+        });
+        uploadArea.addEventListener('drop', (e) => {
+            e.preventDefault();
+            uploadArea.classList.remove('dragover');
+            const files = e.dataTransfer.files;
+            if (files.length > 0) {
+                handleFileUpload(files[0]);
+            }
+        });
+
+        fileInput.addEventListener('change', (e) => {
+            if (e.target.files.length > 0) {
+                handleFileUpload(e.target.files[0]);
+            }
+        });
+
+        async function handleFileUpload(file) {
+            if (!file.name.endsWith('.zip')) {
+                alert('Please upload a ZIP file');
+                return;
+            }
+
+            const formData = new FormData();
+            formData.append('file', file);
+
+            uploadProgress.style.display = 'block';
+            uploadStatus.textContent = 'Uploading...';
+
+            try {
+                const response = await fetch('/api/v1/upload', {
+                    method: 'POST',
+                    body: formData
+                });
+
+                const result = await response.json();
+
+                if (response.ok) {
+                    uploadStatus.textContent = 'Upload successful! Analysis started...';
+                    uploadProgress.querySelector('.progress-bar').style.width = '100%';
+                    
+                    // Refresh the page after a short delay
+                    setTimeout(() => {
+                        location.reload();
+                    }, 2000);
+                } else {
+                    uploadStatus.textContent = 'Upload failed: ' + result.detail;
+                }
+            } catch (error) {
+                uploadStatus.textContent = 'Upload error: ' + error.message;
+            }
+        }
+
+        // View session details
+        async function viewSession(sessionId) {
+            try {
+                const response = await fetch(`/api/v1/sessions/${sessionId}`);
+                const data = await response.json();
+                
+                const modal = new bootstrap.Modal(document.getElementById('sessionModal'));
+                document.getElementById('sessionDetails').innerHTML = `
+                    <div class="row">
+                        <div class="col-md-6">
+                            <h6>Session Information</h6>
+                            <p><strong>Filename:</strong> ${data.session.filename}</p>
+                            <p><strong>Status:</strong> <span class="badge bg-${data.session.status === 'completed' ? 'success' : 'warning'}">${data.session.status}</span></p>
+                            <p><strong>Upload Time:</strong> ${new Date(data.session.upload_time).toLocaleString()}</p>
+                            <p><strong>Total Files:</strong> ${data.session.total_files}</p>
+                            <p><strong>Processed Files:</strong> ${data.session.processed_files}</p>
+                        </div>
+                        <div class="col-md-6">
+                            <h6>File Analysis Results</h6>
+                            <div class="list-group">
+                                ${data.files.map(file => `
+                                    <div class="list-group-item">
+                                        <div class="d-flex justify-content-between">
+                                            <span>${file.file_name}</span>
+                                            <div>
+                                                ${file.is_malicious ? '<span class="badge bg-danger">Malicious</span>' : ''}
+                                                ${file.is_vulnerable ? '<span class="badge bg-warning">Vulnerable</span>' : ''}
+                                                ${!file.is_malicious && !file.is_vulnerable ? '<span class="badge bg-success">Safe</span>' : ''}
+                                            </div>
+                                        </div>
+                                        ${file.cwe_label ? `<small class="text-muted">CWE: ${file.cwe_label}</small>` : ''}
+                                        ${file.metadata_analysis ? `<div class="mt-2"><small class="text-muted">${file.metadata_analysis.replace(/\n/g, '<br>')}</small></div>` : ''}
+                                    </div>
+                                `).join('')}
+                            </div>
+                        </div>
+                    </div>
+                `;
+                modal.show();
+            } catch (error) {
+                console.error('Error loading session details:', error);
+            }
+        }
+
+        // Initialize chart
+        const ctx = document.getElementById('analysisChart').getContext('2d');
+        const analysisChart = new Chart(ctx, {
+            type: 'doughnut',
+            data: {
+                labels: ['Safe Files', 'Malicious Files', 'Vulnerable Files'],
+                datasets: [{
+                    data: [
+                        {{ stats.total_files - stats.malicious_files - stats.vulnerable_files }},
+                        {{ stats.malicious_files }},
+                        {{ stats.vulnerable_files }}
+                    ],
+                    backgroundColor: [
+                        '#28a745',
+                        '#dc3545',
+                        '#ffc107'
+                    ]
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false
+            }
+        });
+    </script>
+</body>
+</html>

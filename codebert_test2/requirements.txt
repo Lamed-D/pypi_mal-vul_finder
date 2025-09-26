@@ -1,0 +1,4 @@
+# For CodeBERT inference
+torch>=2.1,<3
+transformers>=4.40,<5
+numpy==1.26.4

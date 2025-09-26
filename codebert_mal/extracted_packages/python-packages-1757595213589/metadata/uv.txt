@@ -1,0 +1,10 @@
+Name: uv
+Version: 0.8.15
+Summary: An extremely fast Python package and project manager, written in Rust.
+Home-page: https://pypi.org/project/uv/
+Author: 
+Author-email: "Astral Software Inc." <hey@astral.sh>
+License: 
+Location: C:\Users\Lamed\AppData\Local\Programs\Python\Python313\Lib\site-packages
+Requires: 
+Required-by: 
