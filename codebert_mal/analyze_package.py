@@ -35,7 +35,7 @@ MODEL_DIR = BASE_DIR / "model" / "codebert"
 EXTRACT_DIR = BASE_DIR / "extracted_packages"
 REPORT_DIR = BASE_DIR / "log"
 THRESHOLD = 0.5
-BATCH_SIZE = 16  # GPU 메모리 허용 시 배치 크기 증가로 속도 향상
+BATCH_SIZE = 8  # GPU 메모리 허용 시 배치 크기 증가로 속도 향상
 MAX_LENGTH = 512
 STRIDE = 64
 

@@ -16,7 +16,7 @@
 8) 진입점: `main()` 전체 실행 및 요약 출력
 
 ### 주요 파라미터
-- `MAX_LEN=512`, `STRIDE=128`, `BATCH_SZ=16`, `THRESHOLD=0.50`, `DEVICE=auto`
+- `MAX_LEN=512`, `STRIDE=128`, `BATCH_SZ=8`, `THRESHOLD=0.50`, `DEVICE=auto`
 
 ## 환경 요구사항
 - **Python**: 3.8 ~ 3.11
@@ -37,13 +37,13 @@ pip install -r requirements.txt
 ```
 
 ## 주의사항
-- **GPU 메모리**: 배치 크기 16 사용 시 충분한 GPU 메모리 필요
+- **GPU 메모리**: 배치 크기 8 사용 시 충분한 GPU 메모리 필요
 - **모델 파일**: `model/codebert/` 디렉토리에 사전 훈련된 모델 필요
 - **입력 형식**: `source/` 폴더에 ZIP 파일 배치
 - **출력**: `logs/` 디렉토리에 결과 저장
 
 ## 트러블슈팅
-- **CUDA 오류**: GPU 메모리 부족 시 `BATCH_SZ`를 8로 줄이기
+- **CUDA 오류**: GPU 메모리 부족 시 `BATCH_SZ`를 4로 줄이기
 - **모델 로딩 실패**: `model/codebert/` 디렉토리와 파일 존재 확인
 - **Python 3.11 오류**: Python 3.10 이하 버전 사용 권장
 
@@ -62,7 +62,7 @@ utils/helper.py,helper.py,Benign,Benign
 
 ## 성능 최적화
 - **GPU 자동 감지**: CUDA 사용 가능 시 자동으로 GPU 사용
-- **배치 크기**: 16 (GPU 메모리 허용 시 속도 향상)
+- **배치 크기**: 8 (GPU 메모리 허용 시 속도 향상)
 - **PyTorch 2.0+ 최적화**: torch.compile(mode='reduce-overhead') 자동 적용
 - **슬라이딩 윈도우**: 긴 파일도 효율적 처리 (MAX_LEN=512, STRIDE=128)
 - **안전 클래스 자동 탐지**: 정확도 향상

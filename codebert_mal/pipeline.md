@@ -9,7 +9,7 @@
 3. 파일 수집: 대상 루트에서 모든 `.py` 파일 재귀 수집
 4. 모델 로드: `model/codebert/`의 로컬 모델/토크나이저 로드
 5. 토크나이즈: 최대 512 토큰, 스트라이드 64로 슬라이딩 윈도우 분할
-6. 추론: 청크 배치(16)로 추론 후 악성 확률 계산(이진은 sigmoid, 다중은 softmax)
+6. 추론: 청크 배치(8)로 추론 후 악성 확률 계산(이진은 sigmoid, 다중은 softmax)
 7. 집계: 파일 레벨 점수 = 청크 확률 최대값
 8. 라벨링: 임계값 0.5 이상이면 `malicious`, 미만이면 `benign`
 9. 리포트: `log/report.csv` 저장(패키지명, 파일경로, 파일명, 확률, 라벨)
@@ -54,7 +54,7 @@ python analyze_package.py
 ```
 
 ## 주의사항
-- **GPU 메모리**: 배치 크기 16 사용 시 충분한 GPU 메모리 필요
+- **GPU 메모리**: 배치 크기 8 사용 시 충분한 GPU 메모리 필요
 - **모델 파일**: `model/codebert/` 디렉토리에 사전 훈련된 모델 필요
 - **입력 형식**: `source/` 폴더에 ZIP 파일 또는 디렉토리 배치
 - **출력**: `log/report.csv`에 결과 저장
@@ -81,7 +81,7 @@ test-package,utils/helper.py,helper.py,0.23,benign
 ## 성능 최적화
 - **GPU 자동 감지**: CUDA 사용 가능 시 자동으로 GPU 사용
 - **메모리 최적화**: CPU(float32), GPU(float16) 자동 선택
-- **배치 크기**: 16 (GPU 메모리 허용 시 속도 향상)
+- **배치 크기**: 8 (GPU 메모리 허용 시 속도 향상)
 - **PyTorch 2.0+ 최적화**: torch.compile(mode='reduce-overhead') 자동 적용
 - **슬라이딩 윈도우**: 긴 파일도 효율적 처리 (MAX_LENGTH=512, STRIDE=64)
 

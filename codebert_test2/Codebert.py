@@ -34,7 +34,7 @@ LOG_DIR          = os.path.join(CURRENT_DIR, "logs")
 
 MAX_LEN   = 512
 STRIDE    = 128
-BATCH_SZ  = 16  # GPU 메모리 허용 시 배치 크기 증가로 속도 향상
+BATCH_SZ  = 8  # GPU 메모리 허용 시 배치 크기 증가로 속도 향상
 THRESHOLD = 0.50
 DEVICE    = "cuda" if torch.cuda.is_available() else "cpu"
 

@@ -20,6 +20,15 @@
 - `analyze_multiple_files()`: ZIP 풀기→순회→분석→DataFrame
 - `save_analysis_results(df, format)`: csv/json/xlsx 저장
 
+## 실행 방법
+```bash
+# 자동 실행 (원본과 동일한 동작)
+python LSTM.py
+
+# 또는 main() 함수 호출
+python -c "from LSTM import main; main()"
+```
+
 ## 환경 요구사항
 - **Python**: 3.8 ~ 3.11
 - **TensorFlow**: 2.16.1 (pickle 모델 호환성 필수)
@@ -49,6 +58,13 @@ pip install -r requirements.txt
 - **pickle 모델 오류**: `model/` 디렉토리에 `model_mal.pkl` 파일 존재 확인
 - **Word2Vec 오류**: `w2v/word2vec_withString10-6-100.model` 파일 존재 확인
 - **Python 3.11 오류**: Python 3.10 이하 버전 사용 권장
+
+## 원본 대비 개선사항 팀장(박은찬) 작업
+- **자동 실행 제거**: import 시 자동 실행 대신 `main()` 함수로 제어
+- **Keras backend 제거**: DLL 문제 해결을 위해 `tensorflow.keras.backend` import 제거
+- **불필요한 함수 제거**: 콘솔 전용 `analyze_python_code` 함수 제거
+- **GPU 최적화**: TensorFlow GPU 동적 메모리 할당 추가
+- **한글 docstring**: 모든 함수에 상세한 한글 설명 추가
 
 ## 결과 CSV 컬럼
 - `file_path`: 파일 상대 경로
