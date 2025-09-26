@@ -101,3 +101,9 @@ codebert_test2/source/**
 safepy_3/source/**
 safepy_3_malicious/source/**
 codebert_mal/source/**
+
+# Analysis results and logs (분석 결과 및 로그 파일)
+#codebert_test2/logs/
+#safepy_3/result/
+#safepy_3_malicious/result/
+#codebert_mal/log/

@@ -1,18 +1,16 @@
+"""
+전처리 유틸(safepy_3)
+- tokenize_python: 파이썬 코드 토큰화(주석/멀티라인 문자열 제거)
+- get_word_embedding / embed_sequences: Word2Vec 임베딩 변환
+"""
+
 import tokenize
 from io import BytesIO
 import os
 import numpy as np
 
 def tokenize_python(code_str, mask_string=True, mask_number=True):
-    """
-    Python 내장 tokenize 모듈로 소스코드를 토큰화.
-    - 문자열 리터럴은 마스킹 해제 (옵션)
-    - 숫자 리터럴은 마스킹 해제 (옵션)
-    - 주석은 제거
-    - 들여쓰기/줄바꿈은 <INDENT>, <DEDENT>, <EOL>로 표시
-    - 추가: 삼중 따옴표(예: 세 개의 작은따옴표 또는 큰따옴표)로 둘러싼
-      멀티라인 문자열(주석/Docstring 추정) 제거
-    """
+    """파이썬 코드 토큰화(주석/멀티라인 문자열 제거, 들여쓰기 표식 유지)."""
     toks = []
     try:
         g = tokenize.tokenize(BytesIO(code_str.encode("utf-8")).readline)
@@ -37,7 +35,7 @@ def tokenize_python(code_str, mask_string=True, mask_number=True):
             if toknum == tokenize.DEDENT:
                 toks.append("<DEDENT>"); continue # 코드 블럭 끝
 
-            # If we reach here, it's a regular token or a string that wasn't skipped
+            # 일반 토큰 추가
             toks.append(tokval)
     except (tokenize.TokenError, IndentationError, SyntaxError):
         # 코드가 불완전해서 tokenize 실패하는 경우 건너뜀
@@ -65,10 +63,7 @@ except FileNotFoundError:
     w2v_model = None
 
 def get_word_embedding(token, model):
-    """
-    Get the embedding vector for a given token using the Word2Vec model.
-    Returns a zero vector if the token is not in the vocabulary.
-    """
+    """단어 임베딩 벡터를 반환. OOV는 영벡터 반환."""
     if model and token in model.wv:
         return model.wv[token]
     else:
@@ -76,9 +71,7 @@ def get_word_embedding(token, model):
         return np.zeros(model.vector_size) if model else None
 
 def embed_sequences(tokenized_sequences, model):
-    """
-    Convert a list of tokenized sequences into a list of embedding sequences.
-    """
+    """토큰 시퀀스 리스트를 임베딩 시퀀스 리스트로 변환."""
     if not model:
         print("Word2Vec model not loaded. Cannot embed sequences.")
         return None
@@ -96,5 +89,4 @@ def embed_sequences(tokenized_sequences, model):
 
     return embedded_sequences
 
-# 주의: 패딩은 분석 단계에서 고정 길이(예: 100)로 직접 처리합니다.
-# 별도의 pad_token_sequences 유틸은 사용하지 않아 제거했습니다.
+# 패딩은 분석 단계에서 고정 길이(예: 100)로 처리합니다.

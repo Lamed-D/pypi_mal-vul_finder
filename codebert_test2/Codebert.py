@@ -1,10 +1,22 @@
+"""
+CodeBERT 기반 취약점/악성 분석 스크립트(실험용)
+
+절차 개요:
+1) source 폴더의 ZIP 추출 → 파이썬 파일(.py) 수집
+2) 모델/토크나이저 로드
+3) 슬라이딩 윈도우 청크로 추론 → 파일 레벨 확률 집계
+4) CSV 저장(대시보드 최소 필드), 콘솔 요약 출력
+
+본 파일은 실험/배치용으로, 서버 배포는 `server/analysis/lstm_analyzer.py`를 사용합니다.
+"""
+
 import os
 import glob
 import zipfile
 import csv
 import time
 from datetime import datetime
-from dataclasses import dataclass, asdict
+from dataclasses import dataclass
 from typing import List, Optional, Tuple
 
 import torch
@@ -15,14 +27,14 @@ from transformers import AutoTokenizer, AutoModelForSequenceClassification
 # Zero-config 기본 경로/설정
 # =========================
 CURRENT_DIR      = os.path.dirname(os.path.abspath(__file__))
-SOURCE_DIR       = os.path.join(CURRENT_DIR, "source")   # 여기에 *.zip
-MODEL_DIR        = os.path.join(CURRENT_DIR, "model", "codebert")    # 여기에 HF 포맷( config.json, weights, tokenizer )
-CWE_LABELS_PATH  = os.path.join(CURRENT_DIR, "model", "cwe_labels.txt")  # (선택) 라벨명 리스트
-LOG_DIR          = os.path.join(CURRENT_DIR, "logs")     # 결과 로그 저장 폴더
+SOURCE_DIR       = os.path.join(CURRENT_DIR, "source")   # *.zip 위치
+MODEL_DIR        = os.path.join(CURRENT_DIR, "model", "codebert")
+CWE_LABELS_PATH  = os.path.join(CURRENT_DIR, "model", "cwe_labels.txt")
+LOG_DIR          = os.path.join(CURRENT_DIR, "logs")
 
 MAX_LEN   = 512
 STRIDE    = 128
-BATCH_SZ  = 8
+BATCH_SZ  = 16  # GPU 메모리 허용 시 배치 크기 증가로 속도 향상
 THRESHOLD = 0.50
 DEVICE    = "cuda" if torch.cuda.is_available() else "cpu"
 
@@ -30,8 +42,13 @@ DEVICE    = "cuda" if torch.cuda.is_available() else "cpu"
 # 유틸: ZIP 추출 / 파일 찾기 / 파일 읽기
 # =========================
 def extract_zip_files(source_dir: str) -> List[str]:
-    """Extract all .zip files under source_dir into sibling folders.
-    Returns list of extracted directory paths.
+    """source_dir의 ZIP들을 같은 위치로 해제하고, 추출된 디렉토리 경로 목록을 반환.
+
+    Args:
+    	source_dir: ZIP 파일들이 있는 폴더
+
+    Returns:
+    	추출된 디렉토리 경로 리스트
     """
     extracted_dirs = []
     zip_files = glob.glob(os.path.join(source_dir, "*.zip"))
@@ -49,7 +66,14 @@ def extract_zip_files(source_dir: str) -> List[str]:
     return extracted_dirs
 
 def find_python_files(directory: str) -> List[str]:
-    """Recursively collect .py file paths under directory."""
+    """재귀적으로 디렉토리 내 .py 파일 경로를 수집.
+
+    Args:
+    	directory: 탐색 시작 디렉토리
+
+    Returns:
+    	파일 경로 리스트
+    """
     py_files = []
     for root, _, files in os.walk(directory):
         for f in files:
@@ -58,7 +82,14 @@ def find_python_files(directory: str) -> List[str]:
     return py_files
 
 def read_text(path: str) -> Optional[str]:
-    """Read text file with UTF-8 (fallback to ignoring errors)."""
+    """텍스트 파일을 UTF-8로 읽고, 실패 시 오류 무시 모드로 재시도.
+
+    Args:
+    	path: 파일 경로
+
+    Returns:
+    	텍스트 내용 또는 None
+    """
     try:
         with open(path, "r", encoding="utf-8") as f:
             return f.read()
@@ -72,7 +103,14 @@ def read_text(path: str) -> Optional[str]:
             return None
 
 def load_labels(path: str) -> Optional[List[str]]:
-    """Load one label per line from a text file; return None if missing."""
+    """텍스트 파일에서 라벨명을 줄 단위로 로드. 파일이 없으면 None.
+
+    Args:
+    	path: 라벨 파일 경로
+
+    Returns:
+    	라벨명 리스트 또는 None
+    """
     if not os.path.exists(path):
         return None
     try:
@@ -86,11 +124,28 @@ def load_labels(path: str) -> Optional[List[str]]:
 # 모델/토크나이저 로드
 # =========================
 def load_unified_model(model_dir: str, device: str):
-    """Load tokenizer and sequence classification model from model_dir."""
+    """모델 디렉토리에서 토크나이저/분류 모델을 로드하고 device로 이동.
+
+    Args:
+    	model_dir: HF 포맷 모델 디렉토리
+    	device: 'cpu' 또는 'cuda'
+
+    Returns:
+    	(tokenizer, model)
+    """
     tok = AutoTokenizer.from_pretrained(model_dir)
     mdl = AutoModelForSequenceClassification.from_pretrained(model_dir)
     mdl.to(device)
     mdl.eval()
+    
+    # GPU 최적화: 컴파일 모드 활성화 (PyTorch 2.0+)
+    if device == 'cuda' and hasattr(torch, 'compile'):
+        try:
+            mdl = torch.compile(mdl, mode='reduce-overhead')
+            print("[GPU 최적화] torch.compile 활성화")
+        except Exception as e:
+            print(f"[GPU 최적화 실패] {e}")
+    
     return tok, mdl
 
 # =========================
@@ -119,7 +174,11 @@ def find_safe_index(model) -> Optional[int]:
 # 토크나이즈 + 슬라이딩 청크 생성 
 # =========================
 def chunk_with_overflow(tokenizer, text: str, max_len=512, stride=128):
-    """Tokenize text with sliding window overflow to cover long inputs."""
+    """긴 입력을 슬라이딩 윈도우로 커버하도록 토크나이즈.
+
+    Returns:
+    	input_ids/attention_mask를 가진 배치 텐서 딕셔너리
+    """
     enc = tokenizer(
         text,
         return_tensors="pt",
@@ -138,8 +197,17 @@ def chunk_with_overflow(tokenizer, text: str, max_len=512, stride=128):
 @torch.no_grad()
 def predict_unified(device, tokenizer, model, text: str,
                     max_len: int, stride: int, batch_sz: int, topk: int = 3):
-    """Run model inference over chunked text and compute file-level metrics.
-    Returns (vuln_prob, vulnerable_flag, top1_cwe, top1_prob, topk_list).
+    """청크 단위 추론 후 파일 레벨 메트릭 계산.
+
+    Args:
+    	device: 실행 디바이스
+    	tokenizer, model: HF 구성 요소
+    	text: 입력 소스코드
+    	max_len, stride, batch_sz: 토크나이즈/배치 파라미터
+    	topk: 상위 K개의 CWE 반환 개수
+
+    Returns:
+    	(vuln_prob, vulnerable_flag, top1_cwe, top1_prob, topk_list)
     """
     enc = chunk_with_overflow(tokenizer, text, max_len, stride)
     if enc["input_ids"].shape[0] == 0:
@@ -249,7 +317,7 @@ class FileResult:
 # =========================
 def analyze_python_code(path: str, device: str, tok, mdl,
                         max_len=512, stride=128, batch_sz=8, threshold=0.5) -> FileResult:
-    """Analyze a single Python file and return structured result."""
+    """단일 파이썬 파일을 분석하여 구조화된 결과를 반환."""
     start_time = time.time()
     
     code = read_text(path)
@@ -279,7 +347,7 @@ def analyze_python_code(path: str, device: str, tok, mdl,
 # 로그 저장 함수
 # =========================
 def save_results_to_csv(results: List[FileResult], log_file_path: str):
-    """Save selected analysis fields to a compact CSV for dashboard use."""
+    """대시보드용 최소 컬럼으로 압축된 CSV 저장."""
     with open(log_file_path, 'w', newline='', encoding='utf-8') as csvfile:
         fieldnames = ['file_path', 'file_name', 'vulnerability_status', 'cwe_label']
         writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
@@ -299,7 +367,7 @@ def save_results_to_csv(results: List[FileResult], log_file_path: str):
 # 메인
 # =========================
 def main():
-    """CLI entry: extract, scan with CodeBERT, and write a CSV report."""
+    """엔드투엔드: ZIP 해제 → 파일 수집 → 추론 → CSV 저장 및 요약 출력."""
     total_start_time = time.time()
     print(f"[INFO] Device: {DEVICE}")
 

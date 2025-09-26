@@ -4,20 +4,19 @@
 VS Code extension에서 받은 ZIP 파일을 처리하여 Python 코드의 악성/취약점을 분석하고, SQLite 기반 대시보드를 제공하는 통합 시스템 개발
 
 ## 개발 목표
-- ZIP 파일 업로드 및 자동 분석
-- 악성 코드: 메타데이터 분석 활용
-- 취약점 코드: AI 모델 분석 (CodeBERT, LSTM)
-- SQLite 데이터베이스로 결과 저장
-- 웹 대시보드로 시각화
+- ZIP 업로드 수집 및 자동 분석 실행
+- 악성/취약 탐지: LSTM(서버 통합), CodeBERT(오프라인 실험 연동)
+- 메타데이터 기반 점수화(XGBoost) 옵션 적용
+- SQLite로 결과 저장, 대시보드 시각화
 
-## 개발 일정
+## 개발 일정(요약)
 - [x] 프로젝트 구조 설계
-- [ ] 서버 폴더 구조 생성
-- [ ] 데이터베이스 스키마 설계
-- [ ] 분석 엔진 통합
-- [ ] API 엔드포인트 구현
-- [ ] 대시보드 구축
-- [ ] 통합 테스트
+- [x] 서버 폴더 구조 생성
+- [x] 데이터베이스 스키마 설계
+- [x] 분석 엔진 통합(서버 내 LSTM, 모델 아티팩트 배치)
+- [x] API 엔드포인트 구현 및 업로드 플로우
+- [x] 대시보드 기본 구축(세션/상세 뷰)
+- [ ] 앙상블/지표 고도화 및 통합 테스트
 
 ---
 
@@ -29,8 +28,7 @@ server/
 ├── app/
 │   ├── __init__.py
 │   ├── main.py              # FastAPI 메인 애플리케이션
-│   ├── models/              # 데이터베이스 모델
-│   ├── api/                 # API 엔드포인트
+│   ├── api/                 # API 엔드포인트 (현재 server/app/main.py에 통합)
 │   ├── services/            # 비즈니스 로직
 │   ├── utils/               # 유틸리티 함수
 │   └── templates/           # HTML 템플릿
@@ -38,10 +36,7 @@ server/
 │   └── database.py          # SQLite 연결 및 스키마
 ├── analysis/
 │   ├── __init__.py
-│   ├── codebert_analyzer.py # CodeBERT 분석기
-│   ├── lstm_analyzer.py     # LSTM 분석기
-│   ├── metadata_analyzer.py # 메타데이터 분석기
-│   └── unified_analyzer.py  # 통합 분석기
+│   ├── lstm_analyzer.py     # LSTM 분석기(통합)
 ├── static/                  # 정적 파일 (CSS, JS)
 ├── uploads/                 # 업로드된 파일 저장소
 ├── models/                  # AI 모델 파일들
@@ -57,20 +52,20 @@ server/
 - **대시보드**: 분석 결과 시각화 및 관리
 
 ### 3. 기술 스택
-- **Backend**: FastAPI, SQLAlchemy, SQLite
-- **Frontend**: HTML, CSS, JavaScript, Chart.js
-- **AI/ML**: PyTorch, TensorFlow, Transformers
+- **Backend**: FastAPI, SQLite
+- **Frontend**: HTML, Bootstrap 5, Chart.js
+- **AI/ML**: PyTorch/TensorFlow(실험 포함), Transformers, XGBoost
 - **File Processing**: zipfile, pathlib
 
 ---
 
-## 다음 단계
+## 다음 단계(진행 현황)
 1. 서버 폴더 구조 생성 ✅
 2. 데이터베이스 스키마 설계 ✅
-3. 기존 분석 엔진들 통합 ✅
-4. API 엔드포인트 구현 ✅
-5. 웹 대시보드 구축 ✅
-6. 통합 테스트 진행 중
+3. 분석 엔진 통합(서버 내 LSTM) ✅
+4. API 및 업로드 플로우 구현 ✅
+5. 대시보드 구축(세션/상세) ✅
+6. 통합 테스트 및 지표 고도화 진행 중
 
 ---
 
@@ -89,40 +84,34 @@ server/
 ├── database/
 │   └── database.py          # SQLite 모델 및 연결
 ├── analysis/                # 분석 엔진들
-│   ├── codebert_analyzer.py # CodeBERT 분석기
 │   ├── lstm_analyzer.py     # LSTM 분석기
-│   ├── metadata_analyzer.py # 메타데이터 분석기
-│   └── unified_analyzer.py  # 통합 분석기
 ├── config.py                # 설정 파일
 ├── requirements.txt         # 의존성
 └── run.py                   # 실행 파일
 ```
 
 ### 2. 데이터베이스 스키마 설계 ✅
-- **AnalysisSession**: 분석 세션 정보
-- **AnalyzedFile**: 분석된 파일 결과
-- **AnalysisLog**: 분석 로그
-- SQLite 기반으로 가벼운 운영
+- **AnalysisSession**: 업로드 세션/상태/요약
+- **AnalyzedFile**: 파일별 결과/신뢰도/CWE 등
+- **AnalysisLog**: 파이프라인 로그
+- SQLite 기반 경량 운영
 
 ### 3. 분석 엔진 통합 ✅
-- **CodeBERT**: 취약점 탐지 (CWE 분류)
-- **LSTM**: 악성 코드 탐지 (Word2Vec + LSTM)
-- **Metadata**: 패키지 메타데이터 분석 (XGBoost)
-- **Unified**: 통합 분석 로직
+- **LSTM**: 악성/취약 탐지(Word2Vec + LSTM), 서버 내 `analysis/lstm_analyzer.py`
+- **CodeBERT**: CWE 분류(오프라인 실험: `codebert_test2/`), 서버에는 모델 아티팩트만 배치
+- **Metadata**: 메타데이터 기반 분석(XGBoost), 선택적 적용
 
 ### 4. API 엔드포인트 구현 ✅
-- `POST /api/v1/upload`: ZIP 파일 업로드
-- `GET /api/v1/sessions`: 분석 세션 목록
-- `GET /api/v1/sessions/{id}`: 세션 상세 정보
-- `GET /api/v1/stats`: 통계 정보
-- `GET /`: 웹 대시보드
+- `POST /api/v1/upload` (또는 `/upload`): ZIP 업로드 및 분석 트리거
+- `GET /`: 대시보드(세션 리스트)
+- `GET /session/{session_id}`: 세션 상세
+- (내부) 파일 추출/정리 및 분석 서비스 호출
 
 ### 5. 웹 대시보드 구축 ✅
 - **Bootstrap 5** 기반 반응형 UI
-- **Chart.js**를 이용한 시각화
-- 드래그 앤 드롭 파일 업로드
-- 실시간 분석 상태 모니터링
-- 분석 결과 상세 보기
+- **Chart.js** 시각화(세션 요약/분포)
+- 드래그 앤 드롭 업로드, 상태 표시
+- 세션/파일별 상세 결과 뷰
 
 ### 6. 핵심 기능
 - **ZIP 파일 자동 분석**: 업로드 시 자동으로 Python 파일 추출 및 분석
@@ -148,22 +137,22 @@ server/
 
 ## 2024-01-XX - 시스템 통합 완료
 
-### 1. 모델 파일 복사 및 설정 ✅
-- CodeBERT 모델: `server/models/codebert/`
-- LSTM 모델: `server/models/lstm/`
-- Word2Vec 모델: `server/models/w2v/`
-- XGBoost 모델: `server/models/xgboost_model.pkl`
+### 1. 모델 파일 배치 및 설정 ✅
+- CodeBERT: `server/models/codebert/codebert/`
+- LSTM: `server/models/lstm/`
+- Word2Vec: `server/models/w2v/`
+- XGBoost: `server/models/xgboost_model.pkl`
 
 ### 2. 서버 실행 및 테스트 ✅
-- FastAPI 서버 정상 실행
-- 데이터베이스 초기화 완료
-- 웹 대시보드 접속 가능
+- FastAPI 서버 실행/정상 동작
+- DB 초기화 및 세션 기록 확인
+- 대시보드 접속 및 결과 조회 가능
 
 ### 3. 핵심 기능 검증
-- ZIP 파일 업로드 기능
-- 자동 분석 파이프라인
-- 실시간 결과 표시
-- SQLite 데이터 저장
+- ZIP 업로드 및 자동 분석 실행
+- LSTM 기반 탐지 결과 산출
+- 결과 시각화 및 세션 상세 확인
+- SQLite에 이력 저장
 
 ### 4. 사용자 가이드 작성 ✅
 - README.md 작성 완료
@@ -182,10 +171,9 @@ server/
 - **대시보드 URL 반환**: 업로드 완료 시 분석 결과 페이지 URL 제공
 
 ### 2. VS Code Extension 업데이트 ✅
-- **명령어 개선**: "Python Security: Analyze Project" 명령어로 변경
-- **자동 대시보드 열기**: 업로드 완료 후 브라우저에서 결과 페이지 자동 열기
-- **사용자 피드백**: 진행 상황 및 결과를 명확하게 표시
-- **에러 처리**: 권한 오류 등 다양한 상황에 대한 적절한 메시지
+- **명령어**: "Python Security: Analyze Project"
+- **자동 대시보드 열기**: 업로드 후 결과 페이지 자동 오픈
+- **상태/에러 피드백** 강화
 
 ### 3. 세션 상세 보기 템플릿 ✅
 - **반응형 디자인**: Bootstrap 5 기반 모바일 친화적 UI
@@ -210,15 +198,14 @@ Command 실행         + 메타데이터     백그라운드      + Metadata    
 
 ---
 
-## 🎉 프로젝트 완료 요약
+## 🎉 현재 요약(스냅샷)
 
 ### 구현된 기능
-1. **통합 보안 분석 시스템**: CodeBERT + LSTM + Metadata 분석
-2. **웹 기반 대시보드**: 실시간 분석 결과 시각화
-3. **VS Code Extension 연동**: 원클릭 분석 및 자동 대시보드 열기
-4. **자동화된 워크플로우**: ZIP 업로드 → 분석 → 결과 저장 → 시각화
-5. **SQLite 데이터베이스**: 분석 이력 및 통계 관리
-6. **RESTful API**: 확장 가능한 API 구조
+1. 통합 보안 분석 시스템(서버 내 LSTM + 메타데이터 옵션, CodeBERT 실험)
+2. 웹 대시보드(세션/상세, 기본 통계/시각화)
+3. VS Code 확장 연동(원클릭 업로드/결과 확인)
+4. 자동화된 플로우: ZIP 업로드 → 분석 → 저장 → 시각화
+5. SQLite 기반 이력/통계 관리
 
 ### 기술적 성과
 - **모듈화된 아키텍처**: 각 분석 엔진이 독립적으로 작동
@@ -228,10 +215,10 @@ Command 실행         + 메타데이터     백그라운드      + Metadata    
 - **VS Code 통합**: 개발 환경에서 직접 보안 분석 가능
 
 ### 향후 개선 방향
-1. **성능 최적화**: GPU 가속 및 배치 처리 개선
-2. **기능 확장**: 더 많은 분석 엔진 통합
-3. **보안 강화**: 인증 및 권한 관리 추가
-4. **모니터링**: 로깅 및 알림 시스템 구축
+1. 성능 최적화: 모델 경량화, 배치 처리 개선
+2. 기능 확장: CodeBERT 추론 옵션화/앙상블 스코어링
+3. 보안 강화: 인증/권한, 업로드 검증 강화
+4. 모니터링: 로그 표준화 및 알림
 
 ## 🚀 사용 방법
 

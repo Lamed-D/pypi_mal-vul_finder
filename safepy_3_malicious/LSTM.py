@@ -1,3 +1,13 @@
+"""
+LSTM 기반 악성 여부 탐지 파이프라인 (safepy_3_malicious)
+
+절차:
+1) source 폴더의 ZIP 해제 → 파이썬 파일 수집
+2) 전처리(토큰화 → Word2Vec 임베딩 → 패딩)
+3) 단일 모델(model_mal)로 악성/정상 판정 및 확률 산출
+4) CSV/JSON 결과 저장
+"""
+
 import pickle
 import os
 import numpy as np
@@ -5,7 +15,7 @@ import pandas as pd
 import zipfile
 import glob
 import gc
-from tensorflow.keras import backend as K
+# Keras backend import removed to avoid DLL issues
 from preprocess import tokenize_python, embed_sequences, w2v_model
 
 # Get the current directory (where this script is located)
@@ -21,7 +31,7 @@ source_dir = os.path.join(current_dir, 'source')
 w2v_dir = os.path.join(current_dir, 'w2v')
 
 def extract_zip_files():
-    """Extract all zip files in the source directory"""
+    """source 폴더 내 ZIP 파일을 모두 해제하고 추출 폴더 경로 목록을 반환."""
     extracted_files = []
     
     # Find all zip files in source directory
@@ -46,7 +56,7 @@ def extract_zip_files():
     return extracted_files
 
 def find_python_files(directory):
-    """Find all Python files in a directory recursively"""
+    """디렉토리 하위의 모든 .py 파일 경로를 재귀적으로 수집."""
     python_files = []
     for root, dirs, files in os.walk(directory):
         for file in files:
@@ -55,7 +65,7 @@ def find_python_files(directory):
     return python_files
 
 def read_python_file(file_path):
-    """Read Python file and return its content"""
+    """파이썬 파일을 UTF-8로 읽어 내용 문자열을 반환."""
     try:
         with open(file_path, 'r', encoding='utf-8') as f:
             return f.read()
@@ -71,6 +81,21 @@ try:
     with open(os.path.join(model_save_dir, 'model_mal.pkl'), 'rb') as f:
         model_mal = pickle.load(f)
     print("model_mal loaded successfully.")
+    
+    # GPU 최적화: TensorFlow/Keras 모델 최적화
+    import tensorflow as tf
+    if tf.config.list_physical_devices('GPU'):
+        print("[GPU 최적화] TensorFlow GPU 사용 가능")
+        # GPU 메모리 증가 허용
+        gpus = tf.config.experimental.list_physical_devices('GPU')
+        if gpus:
+            try:
+                for gpu in gpus:
+                    tf.config.experimental.set_memory_growth(gpu, True)
+                print("[GPU 최적화] 동적 메모리 할당 활성화")
+            except RuntimeError as e:
+                print(f"[GPU 최적화] 메모리 설정 실패: {e}")
+    
 except FileNotFoundError:
     print("Error: model_mal.pkl not found.")
 
@@ -82,73 +107,28 @@ except FileNotFoundError:
     print("Error: label_encoder_mal.pkl not found.")
 
 
-def analyze_python_code(source_code, file_path):
-    """Analyze a single Python code file for vulnerabilities"""
-    print(f"\n--- Analyzing: {file_path} ---")
-    print("Source Code snippet:")
-    print(source_code[:500] + "..." if len(source_code) > 500 else source_code)
-
-    # Preprocess the source code: tokenize, embed, and pad
-    tokenized_code = tokenize_python(source_code)
-
-    if w2v_model: # Ensure Word2Vec model is loaded for embedding
-        embedded_code = embed_sequences([tokenized_code], w2v_model)
-        if embedded_code and len(embedded_code) > 0 and embedded_code[0].size > 0:
-            # Pad the embedded sequence
-            max_sequence_length = 100 # Use the same max length as training
-            embedding_dim = w2v_model.vector_size
-            padded_code = np.zeros((max_sequence_length, embedding_dim))
-
-            embedded_sequence = embedded_code[0]
-            if embedded_sequence.shape[0] > 0:
-                padding_length = max_sequence_length - embedded_sequence.shape[0]
-                if padding_length > 0:
-                    padding = np.zeros((padding_length, embedding_dim))
-                    padded_code = np.concatenate((embedded_sequence, padding), axis=0)
-                else:
-                    padded_code = embedded_sequence[:max_sequence_length]
-
-            # Reshape for prediction (add batch dimension)
-            padded_code = np.expand_dims(padded_code, axis=0)
-
-            # model_mal 단일 모델로 예측 (이진/다중분류 모두 대응)
-            prediction = model_mal.predict(padded_code)
-            if prediction.ndim == 2 and prediction.shape[1] == 1:
-                # Binary sigmoid
-                predicted_index = int((prediction > 0.5).astype(int)[0][0])
-            else:
-                # Multiclass softmax
-                predicted_index = int(np.argmax(prediction, axis=1)[0])
-
-            decoded_label = label_encoder_mal.inverse_transform([predicted_index])[0]
-
-            benign_aliases = {"Benign", "benign", "Not Vulnerable", "Normal", "Safe", "0", 0}
-            is_benign = decoded_label in benign_aliases
-
-            print(f"\nPredicted Label: {decoded_label}")
-            print(f"Predicted Vulnerability Status: {'Vulnerable' if not is_benign else 'Not Vulnerable'}")
-
-        else:
-            print("Error: Could not embed the source code.")
-    else:
-        print("Error: Word2Vec model not loaded. Cannot embed sequences.")
+# 사용되지 않는 콘솔 출력용 함수(analyze_python_code)는 제거했습니다.
 
 def analyze_multiple_files():
-    """여러 파일을 분석하고 결과를 DataFrame으로 반환하는 함수"""
+    """여러 파일을 분석하고 결과를 DataFrame으로 반환.
+
+    Returns:
+    	분석 결과 DataFrame 또는 None
+    """
     import time
     
     # 분석 시작 시간 기록
     start_time = time.time()
     results = []
     
-    # Extract zip files from source directory
+    # ZIP 해제
     extracted_dirs = extract_zip_files()
     
     if not extracted_dirs:
         print("No zip files found in source directory. Please place zip files containing Python code in the 'source' folder.")
         return None
     
-    # Analyze all Python files in extracted directories
+    # 추출 폴더들 순회
     for extract_dir in extracted_dirs:
         print(f"\n=== Analyzing files in: {extract_dir} ===")
         python_files = find_python_files(extract_dir)
@@ -205,7 +185,15 @@ def analyze_multiple_files():
     return df
 
 def save_analysis_results(df, output_format='csv'):
-    """분석 결과를 다양한 형식으로 저장하는 함수"""
+    """분석 결과를 다양한 형식(csv/json/xlsx)으로 저장.
+
+    Args:
+    	df: 분석 결과 DataFrame
+    	output_format: 'csv' | 'json' | 'excel'
+
+    Returns:
+    	저장된 파일 경로 또는 None
+    """
     if df is None or df.empty:
         print("저장할 데이터가 없습니다.")
         return None
@@ -239,7 +227,15 @@ def save_analysis_results(df, output_format='csv'):
     return output_file
 
 def analyze_single_file(source_code, file_path):
-    """단일 파일 분석 함수"""
+    """단일 파일 분석: 전처리 → model_mal 예측 → 악성 확률/라벨 반환.
+
+    Args:
+    	source_code: 파일 텍스트
+    	file_path: 파일 경로(로그용)
+
+    Returns:
+    	{'malicious_status': 'malicious'|'benign', 'malicious_probability': float} 또는 None
+    """
     try:
         # Preprocess the source code: tokenize, embed, and pad
         tokenized_code = tokenize_python(source_code)
@@ -294,38 +290,29 @@ def analyze_single_file(source_code, file_path):
         print(f"Error analyzing {file_path}: {e}")
         return None
 
-# Ensure model and label encoder are loaded before proceeding
-if model_mal and label_encoder_mal:
+def main():
+    """엔드투엔드 실행: 모델 확인 → 다중 파일 분석 → 결과 저장 → 정리."""
+    if not (model_mal and label_encoder_mal):
+        print("Error: model_mal or label_encoder_mal failed to load. Cannot perform analysis.")
+        return
+
     print("Model and label encoder loaded successfully. Starting analysis...")
-    
-    # 1. 파일 분석 수행
     analysis_df = analyze_multiple_files()
-    
-    # 2. 결과 저장 (여러 형식 지원)
     if analysis_df is not None:
-        # CSV 형식으로 저장
         save_analysis_results(analysis_df, 'csv')
-        
-        # JSON 형식으로도 저장 (서버 대시보드용)
         save_analysis_results(analysis_df, 'json')
-else:
-    print("Error: model_mal or label_encoder_mal failed to load. Cannot perform analysis.")
 
-# --- Graceful cleanup to avoid TensorFlow teardown warnings ---
-try:
-    # Clear TF/Keras session and free graph/resources
-    K.clear_session()
-except Exception:
-    pass
+    # --- 종료 정리 ---
+    # K.clear_session() 제거됨 - gc.collect()로 충분
+    for _obj in ['model_mal', 'label_encoder_mal']:
+        if _obj in globals():
+            try:
+                del globals()[_obj]
+            except Exception:
+                pass
+    gc.collect()
 
-# Help GC by dropping large objects
-for _obj in [
-    'model_mal', 'label_encoder_mal'
-]:
-    if _obj in globals():
-        try:
-            del globals()[_obj]
-        except Exception:
-            pass
 
-gc.collect()
+if __name__ == "__main__":
+    os.makedirs(source_dir, exist_ok=True)
+    main()
