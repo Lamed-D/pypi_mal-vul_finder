@@ -135,6 +135,11 @@ ZIP 압축 해제 → Python 파일 추출 → 파일 내용 읽기 → 메모�
    ```bash
    pip install -r requirements.txt
    ```
+   
+   **통합된 의존성:**
+   - FastAPI 웹 서버 (python-server)
+   - 취약점 분석 LSTM 모델 (safepy_3)
+   - 악성코드 분석 LSTM 모델 (safepy_3_malicious)
 
 2. **서버 실행**
    ```bash
@@ -145,6 +150,21 @@ ZIP 압축 해제 → Python 파일 추출 → 파일 내용 읽기 → 메모�
    ```
    http://127.0.0.1:8000
    ```
+
+## 📦 의존성 구성
+
+### 핵심 라이브러리
+- **FastAPI**: 웹 서버 프레임워크
+- **TensorFlow**: LSTM 모델 실행
+- **scikit-learn**: 라벨 인코더 및 전처리
+- **pandas/numpy**: 데이터 처리
+- **gensim**: Word2Vec 모델
+- **SQLAlchemy**: 데이터베이스 ORM
+
+### 버전 호환성
+- Python: 3.8 ~ 3.11
+- TensorFlow: 2.16.1
+- scikit-learn: 1.3.2
 
 ## 📊 성능 특성
 

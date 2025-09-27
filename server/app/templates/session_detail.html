@@ -6,34 +6,118 @@
     <title>분석 세션 상세 - Python Security Analysis</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism.min.css" rel="stylesheet">
     <style>
         .status-badge {
             font-size: 0.8em;
             padding: 0.25em 0.5em;
         }
-        .file-card {
-            border-left: 4px solid #dee2e6;
-            transition: all 0.3s ease;
-        }
-        .file-card.safe {
-            border-left-color: #28a745;
-        }
-        .file-card.malicious {
-            border-left-color: #dc3545;
-        }
+        
+        /* 취약점 파일 카드 스타일 */
         .file-card.vulnerable {
-            border-left-color: #ffc107;
+            border-left: 4px solid #ffc107;
+            transition: all 0.3s ease;
+            background-color: #fff3cd;
+            cursor: pointer;
         }
+        
+        /* 악성코드 파일 카드 스타일 */
+        .file-card.malicious {
+            border-left: 4px solid #dc3545;
+            transition: all 0.3s ease;
+            background-color: #f8d7da;
+            cursor: pointer;
+        }
+        
+        /* 안전한 파일 카드 스타일 */
+        .file-card.safe {
+            border-left: 4px solid #28a745;
+            transition: all 0.3s ease;
+            background-color: #d4edda;
+            cursor: pointer;
+        }
+        
         .file-card:hover {
             transform: translateY(-2px);
             box-shadow: 0 4px 8px rgba(0,0,0,0.1);
         }
+        
+        /* 배지 스타일 */
+        .warning-badge {
+            background: linear-gradient(135deg, #ffc107 0%, #e0a800 100%);
+            color: #212529;
+        }
+        
+        .danger-badge {
+            background: linear-gradient(135deg, #dc3545 0%, #c82333 100%);
+            color: white;
+        }
+        
+        .cwe-badge {
+            background: linear-gradient(135deg, #17a2b8 0%, #138496 100%);
+            color: white;
+        }
+        
+        /* 모달 스타일 */
+        .code-modal .modal-dialog {
+            max-width: 90%;
+        }
+        
+        .code-content {
+            max-height: 70vh;
+            overflow-y: auto;
+            background-color: #f8f9fa;
+            border-radius: 0.375rem;
+            padding: 1rem;
+            font-family: 'Courier New', monospace;
+            font-size: 0.9em;
+            line-height: 1.4;
+        }
+        
+        /* 통계 카드 스타일 */
+        .stats-card {
+            background: linear-gradient(135deg, #6c757d 0%, #495057 100%);
+            color: white;
+            border-radius: 10px;
+            padding: 20px;
+            margin-bottom: 20px;
+        }
+        
+        .stats-card.vulnerable {
+            background: linear-gradient(135deg, #feca57 0%, #ff9ff3 100%);
+        }
+        
+        .stats-card.malicious {
+            background: linear-gradient(135deg, #ff6b6b 0%, #ee5a24 100%);
+        }
+        
+        .stats-card.safe {
+            background: linear-gradient(135deg, #28a745 0%, #20c997 100%);
+        }
+        
+        /* 헤더 스타일 */
+        .session-header {
+            background: linear-gradient(135deg, #6c757d 0%, #495057 100%);
+            color: white;
+            border-radius: 10px;
+            padding: 20px;
+            margin-bottom: 20px;
+        }
+        
+        /* 브레드크럼 스타일 */
+        .breadcrumb {
+            background-color: #f8f9fa;
+            border-radius: 0.375rem;
+        }
+        
+        /* 메타데이터 섹션 */
         .metadata-section {
             background-color: #f8f9fa;
             border-radius: 0.375rem;
             padding: 1rem;
             margin-top: 1rem;
         }
+        
         .analysis-details {
             font-family: 'Courier New', monospace;
             font-size: 0.9em;
@@ -57,26 +141,38 @@
 
     <div class="container mt-4">
         <!-- 세션 정보 헤더 -->
+        <div class="session-header">
+            <div class="row align-items-center">
+                <div class="col-md-8">
+                    <h2 class="mb-0">
+                        <i class="fas fa-file-archive me-2"></i>분석 세션 상세
+                    </h2>
+                    <p class="mb-0 mt-2">통합 분석 결과 - 취약점 + 악성코드 분석</p>
+                </div>
+                <div class="col-md-4 text-end">
+                    <div class="d-flex gap-2 justify-content-end">
+                        <span class="badge bg-{{ 'success' if session.is_safe else 'danger' }} status-badge">
+                            {{ 'Safe' if session.is_safe else 'Unsafe' }}
+                        </span>
+                        <a href="/session/{{ session.session_id }}/malicious" class="btn btn-light">
+                            <i class="fas fa-skull-crossbones me-1"></i>악성 코드
+                        </a>
+                        <a href="/session/{{ session.session_id }}/vulnerable" class="btn btn-warning">
+                            <i class="fas fa-exclamation-triangle me-1"></i>취약점
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 세션 정보 -->
         <div class="row mb-4">
             <div class="col-12">
                 <div class="card">
-                    <div class="card-header d-flex justify-content-between align-items-center">
-                        <h4 class="mb-0">
-                            <i class="fas fa-file-archive me-2"></i>분석 세션 상세
-                        </h4>
-                        <div class="d-flex gap-2">
-                            <span class="badge bg-{{ 'success' if session.is_safe else 'danger' }} status-badge">
-                                {{ 'Safe' if session.is_safe else 'Unsafe' }}
-                            </span>
-                            <div class="btn-group" role="group">
-                                <a href="/session/{{ session.session_id }}/malicious" class="btn btn-sm btn-danger">
-                                    <i class="fas fa-skull-crossbones me-1"></i>악성 코드
-                                </a>
-                                <a href="/session/{{ session.session_id }}/vulnerable" class="btn btn-sm btn-warning">
-                                    <i class="fas fa-exclamation-triangle me-1"></i>취약점
-                                </a>
-                            </div>
-                        </div>
+                    <div class="card-header">
+                        <h5 class="mb-0">
+                            <i class="fas fa-info-circle me-2"></i>세션 정보
+                        </h5>
                     </div>
                     <div class="card-body">
                         <div class="row">
@@ -84,15 +180,22 @@
                                 <h6 class="text-muted">파일명</h6>
                                 <p class="mb-2">{{ session.filename }}</p>
                                 
-                                <h6 class="text-muted">업로드 시간</h6>
-                                <p class="mb-2">{{ session.upload_time.strftime('%Y-%m-%d %H:%M:%S') }}</p>
-                            </div>
-                            <div class="col-md-6">
                                 <h6 class="text-muted">세션 ID</h6>
                                 <p class="mb-2"><code>{{ session.session_id }}</code></p>
+                            </div>
+                            <div class="col-md-6">
+                                <h6 class="text-muted">업로드 시간</h6>
+                                <p class="mb-2">{{ session.upload_time }}</p>
                                 
-                                <h6 class="text-muted">총 파일 수</h6>
-                                <p class="mb-2">{{ session.total_files }}</p>
+                                <h6 class="text-muted">분석 모델</h6>
+                                <p class="mb-2">{{ session.analysis_model }}</p>
+                            </div>
+                        </div>
+                        <div class="row mt-3">
+                            <div class="col-12 text-center">
+                                <a href="/session/{{ session.session_id }}" class="btn btn-primary">
+                                    <i class="fas fa-list me-1"></i>전체보기 리포트
+                                </a>
                             </div>
                         </div>
                     </div>
@@ -103,39 +206,31 @@
         <!-- 분석 결과 통계 -->
         <div class="row mb-4">
             <div class="col-md-3">
-                <div class="card text-center">
-                    <div class="card-body">
-                        <i class="fas fa-file-code text-primary fa-2x mb-2"></i>
-                        <h5 class="card-title">{{ session.total_files }}</h5>
-                        <p class="card-text text-muted">총 파일 수</p>
-                    </div>
+                <div class="stats-card text-center">
+                    <i class="fas fa-file-alt fa-3x mb-3"></i>
+                    <h3>{{ session.total_files }}</h3>
+                    <p class="mb-0">총 파일 수</p>
                 </div>
             </div>
             <div class="col-md-3">
-                <div class="card text-center">
-                    <div class="card-body">
-                        <i class="fas fa-shield-alt text-success fa-2x mb-2"></i>
-                        <h5 class="card-title">{{ session.safe_files }}</h5>
-                        <p class="card-text text-muted">안전한 파일</p>
-                    </div>
+                <div class="stats-card safe text-center">
+                    <i class="fas fa-shield-alt fa-3x mb-3"></i>
+                    <h3>{{ session.safe_files }}</h3>
+                    <p class="mb-0">안전한 파일</p>
                 </div>
             </div>
             <div class="col-md-3">
-                <div class="card text-center">
-                    <div class="card-body">
-                        <i class="fas fa-exclamation-triangle text-warning fa-2x mb-2"></i>
-                        <h5 class="card-title">{{ session.vulnerable_files }}</h5>
-                        <p class="card-text text-muted">취약한 파일</p>
-                    </div>
+                <div class="stats-card vulnerable text-center">
+                    <i class="fas fa-exclamation-triangle fa-3x mb-3"></i>
+                    <h3>{{ session.vulnerable_files }}</h3>
+                    <p class="mb-0">취약한 파일</p>
                 </div>
             </div>
             <div class="col-md-3">
-                <div class="card text-center">
-                    <div class="card-body">
-                        <i class="fas fa-skull-crossbones text-danger fa-2x mb-2"></i>
-                        <h5 class="card-title">{{ session.malicious_files }}</h5>
-                        <p class="card-text text-muted">악성 파일</p>
-                    </div>
+                <div class="stats-card malicious text-center">
+                    <i class="fas fa-skull-crossbones fa-3x mb-3"></i>
+                    <h3>{{ session.malicious_files }}</h3>
+                    <p class="mb-0">악성 파일</p>
                 </div>
             </div>
         </div>
@@ -145,16 +240,21 @@
         <div class="row mb-4">
             <div class="col-12">
                 <div class="card">
-                    <div class="card-header">
+                    <div class="card-header d-flex justify-content-between align-items-center">
                         <h5 class="mb-0">
-                            <i class="fas fa-exclamation-triangle me-2"></i>취약점 분석 결과 (LSTM_VUL)
+                            <i class="fas fa-bug me-2"></i>취약점 분석 결과 (LSTM_VUL)
                         </h5>
+                        <span class="badge warning-badge">{{ session.vulnerability_results|length }}개 파일</span>
                     </div>
                     <div class="card-body">
                         <div class="row">
                             {% for file in session.vulnerability_results %}
                             <div class="col-md-6 mb-3">
-                                <div class="card file-card vulnerable">
+                                <div class="card file-card vulnerable" 
+                                     data-file-name="{{ file.file_name }}" 
+                                     data-file-path="{{ file.file_path | tojson }}" 
+                                     data-analysis-type="vulnerable" 
+                                     data-analysis-data="{{ file | tojson }}">
                                     <div class="card-body">
                                         <div class="d-flex justify-content-between align-items-start mb-2">
                                             <h6 class="card-title mb-0">
@@ -171,7 +271,7 @@
                                         </div>
 
                                         <div class="mb-2">
-                                            <span class="badge bg-info me-1">CWE-{{ file.cwe_label }}</span>
+                                            <span class="badge cwe-badge me-1">{{ file.cwe_label }}</span>
                                             <small class="text-muted">신뢰도: {{ "%.1f"|format(file.vulnerability_probability * 100) }}%</small>
                                         </div>
 
@@ -196,16 +296,21 @@
         <div class="row mb-4">
             <div class="col-12">
                 <div class="card">
-                    <div class="card-header">
+                    <div class="card-header d-flex justify-content-between align-items-center">
                         <h5 class="mb-0">
-                            <i class="fas fa-skull-crossbones me-2"></i>악성 코드 분석 결과 (LSTM_MAL)
+                            <i class="fas fa-bug me-2"></i>악성 코드 분석 결과 (LSTM_MAL)
                         </h5>
+                        <span class="badge danger-badge">{{ session.malicious_results|length }}개 파일</span>
                     </div>
                     <div class="card-body">
                         <div class="row">
                             {% for file in session.malicious_results %}
                             <div class="col-md-6 mb-3">
-                                <div class="card file-card malicious">
+                                <div class="card file-card malicious" 
+                                     data-file-name="{{ file.file_name }}" 
+                                     data-file-path="{{ file.file_path | tojson }}" 
+                                     data-analysis-type="malicious" 
+                                     data-analysis-data="{{ file | tojson }}">
                                     <div class="card-body">
                                         <div class="d-flex justify-content-between align-items-start mb-2">
                                             <h6 class="card-title mb-0">
@@ -227,11 +332,6 @@
                                             </small>
                                         </div>
 
-                                        <div class="mb-2">
-                                            <small class="text-muted">
-                                                <strong>라벨:</strong> {{ file.malicious_label }}
-                                            </small>
-                                        </div>
 
                                         <div class="mb-2">
                                             <small class="text-muted">
@@ -260,9 +360,9 @@
                         </h5>
                     </div>
                     <div class="card-body">
-                        <div class="text-center py-4">
-                            <i class="fas fa-shield-alt text-success fa-3x mb-3"></i>
-                            <h5 class="text-success">{{ session.safe_files }}개의 파일이 안전합니다</h5>
+                        <div class="text-center py-5">
+                            <i class="fas fa-shield-alt text-success fa-4x mb-3"></i>
+                            <h4 class="text-success">{{ session.safe_files }}개의 파일이 안전합니다</h4>
                             <p class="text-muted">취약점이나 악성 코드가 발견되지 않았습니다.</p>
                         </div>
                     </div>
@@ -272,6 +372,136 @@
         {% endif %}
     </div>
 
+    <!-- 소스코드 모달 -->
+    <div class="modal fade code-modal" id="sourceCodeModal" tabindex="-1">
+        <div class="modal-dialog modal-xl">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">
+                        <i class="fas fa-file-code me-2"></i>
+                        <span id="modalFileName"></span>
+                    </h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="row">
+                        <div class="col-md-8">
+                            <h6>소스코드</h6>
+                            <div class="code-content">
+                                <pre><code id="sourceCode" class="language-python"></code></pre>
+                            </div>
+                        </div>
+                        <div class="col-md-4">
+                            <h6>분석 정보</h6>
+                            <div id="analysisInfo" class="card">
+                                <div class="card-body">
+                                    <!-- 분석 정보가 여기에 표시됩니다 -->
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">닫기</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.24.1/components/prism-core.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.24.1/plugins/autoloader/prism-autoloader.min.js"></script>
+    <script>
+        // 페이지 로드 시 이벤트 리스너 추가
+        document.addEventListener('DOMContentLoaded', function() {
+            // 취약점 파일 카드 클릭 이벤트
+            document.querySelectorAll('.file-card.vulnerable').forEach(card => {
+                card.addEventListener('click', function() {
+                    const fileName = this.dataset.fileName;
+                    const filePath = JSON.parse(this.dataset.filePath);
+                    const analysisType = this.dataset.analysisType;
+                    const analysisData = JSON.parse(this.dataset.analysisData);
+                    showSourceCode(fileName, filePath, analysisType, analysisData);
+                });
+            });
+            
+            // 악성코드 파일 카드 클릭 이벤트
+            document.querySelectorAll('.file-card.malicious').forEach(card => {
+                card.addEventListener('click', function() {
+                    const fileName = this.dataset.fileName;
+                    const filePath = JSON.parse(this.dataset.filePath);
+                    const analysisType = this.dataset.analysisType;
+                    const analysisData = JSON.parse(this.dataset.analysisData);
+                    showSourceCode(fileName, filePath, analysisType, analysisData);
+                });
+            });
+        });
+
+        async function showSourceCode(fileName, filePath, type, analysisData) {
+            try {
+                // 모달 제목 설정
+                document.getElementById('modalFileName').textContent = fileName;
+                
+                // 파일 경로 정리 (특수 문자 제거 및 백슬래시를 슬래시로 변환)
+                const cleanFilePath = filePath.replace(/[\r\n\t]/g, '').replace(/\\/g, '/').trim();
+                console.log('Original file path:', filePath);
+                console.log('Clean file path:', cleanFilePath);
+                
+                // 소스코드 로드 (세션 ID 기반)
+                const sessionId = '{{ session.session_id }}';
+                const apiUrl = `/api/v1/source/${sessionId}/${encodeURIComponent(cleanFilePath)}`;
+                console.log('API URL:', apiUrl);
+                console.log('Session ID:', sessionId);
+                console.log('File path:', cleanFilePath);
+                
+                const response = await fetch(apiUrl);
+                console.log('Response status:', response.status);
+                
+                if (response.ok) {
+                    const sourceCode = await response.text();
+                    // PlainTextResponse로 순수 텍스트가 반환되므로 추가 처리 불필요
+                    document.getElementById('sourceCode').textContent = sourceCode;
+                } else {
+                    const errorText = await response.text();
+                    console.error('API Error:', response.status, errorText);
+                    document.getElementById('sourceCode').textContent = `소스코드를 불러올 수 없습니다. (${response.status})`;
+                }
+                
+                // 분석 결과 표시
+                const analysisDetails = document.getElementById('analysisInfo');
+                if (type === 'vulnerable') {
+                    analysisDetails.innerHTML = `
+                        <div class="alert alert-warning">
+                            <h6><i class="fas fa-exclamation-triangle me-1"></i>취약점 분석 결과</h6>
+                            <p><strong>상태:</strong> ${analysisData.vulnerability_status}</p>
+                            <p><strong>CWE 라벨:</strong> ${analysisData.cwe_label}</p>
+                            <p><strong>취약점 확률:</strong> ${(analysisData.vulnerability_probability * 100).toFixed(1)}%</p>
+                            <p><strong>분석 시간:</strong> ${analysisData.analysis_time.toFixed(2)}초</p>
+                        </div>
+                    `;
+                } else if (type === 'malicious') {
+                    analysisDetails.innerHTML = `
+                        <div class="alert alert-danger">
+                            <h6><i class="fas fa-skull-crossbones me-1"></i>악성코드 분석 결과</h6>
+                            <p><strong>상태:</strong> ${analysisData.malicious_status}</p>
+                            <p><strong>악성 확률:</strong> ${(analysisData.malicious_probability * 100).toFixed(1)}%</p>
+                            <p><strong>분석 시간:</strong> ${analysisData.analysis_time.toFixed(2)}초</p>
+                        </div>
+                    `;
+                }
+                
+                // 모달 표시
+                const modal = new bootstrap.Modal(document.getElementById('sourceCodeModal'));
+                modal.show();
+                
+                // Prism 하이라이팅 적용
+                Prism.highlightAll();
+                
+            } catch (error) {
+                console.error('Error loading source code:', error);
+                alert('소스코드를 불러오는 중 오류가 발생했습니다.');
+            }
+        }
+    </script>
 </body>
 </html>

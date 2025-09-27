@@ -192,12 +192,6 @@
                                                 </small>
                                             </div>
 
-                                            <div class="mb-2">
-                                                <small class="text-muted">
-                                                    <strong>악성 라벨:</strong> 
-                                                    <span class="badge bg-warning text-dark">{{ file.malicious_label }}</span>
-                                                </small>
-                                            </div>
 
                                             <div class="mb-2">
                                                 <small class="text-muted">
@@ -317,7 +311,6 @@
                     <div class="alert alert-danger">
                         <h6><i class="fas fa-skull-crossbones me-1"></i>악성코드 분석 결과</h6>
                         <p><strong>상태:</strong> ${analysisData.malicious_status}</p>
-                        <p><strong>라벨:</strong> ${analysisData.malicious_label}</p>
                         <p><strong>악성 확률:</strong> ${(analysisData.malicious_probability * 100).toFixed(1)}%</p>
                         <p><strong>분석 시간:</strong> ${analysisData.analysis_time.toFixed(2)}초</p>
                     </div>
