@@ -145,15 +145,21 @@
                                         <h6>{{ session.filename }}</h6>
                                         <small class="text-muted">
                                             <i class="fas fa-clock"></i> {{ session.upload_time.strftime('%Y-%m-%d %H:%M:%S') }}
-                                            <span class="badge bg-{{ 'success' if session.status == 'completed' else 'warning' if session.status == 'processing' else 'danger' }}">
-                                                {{ session.status }}
+                                            <span class="badge bg-{{ 'success' if session.is_safe else 'danger' }}">
+                                                {{ 'Safe' if session.is_safe else 'Unsafe' }}
                                             </span>
                                         </small>
                                     </div>
-                                    <div>
+                                    <div class="btn-group" role="group">
                                         <button class="btn btn-sm btn-outline-primary" onclick="viewSession('{{ session.session_id }}')">
-                                            <i class="fas fa-eye"></i> View
+                                            <i class="fas fa-eye"></i> 전체
                                         </button>
+                                        <a href="/session/{{ session.session_id }}/malicious" class="btn btn-sm btn-outline-danger">
+                                            <i class="fas fa-skull-crossbones"></i> 악성
+                                        </a>
+                                        <a href="/session/{{ session.session_id }}/vulnerable" class="btn btn-sm btn-outline-warning">
+                                            <i class="fas fa-exclamation-triangle"></i> 취약
+                                        </a>
                                     </div>
                                 </div>
                             </div>
@@ -276,27 +282,32 @@
                     <div class="row">
                         <div class="col-md-6">
                             <h6>Session Information</h6>
-                            <p><strong>Filename:</strong> ${data.session.filename}</p>
-                            <p><strong>Status:</strong> <span class="badge bg-${data.session.status === 'completed' ? 'success' : 'warning'}">${data.session.status}</span></p>
-                            <p><strong>Upload Time:</strong> ${new Date(data.session.upload_time).toLocaleString()}</p>
-                            <p><strong>Total Files:</strong> ${data.session.total_files}</p>
-                            <p><strong>Processed Files:</strong> ${data.session.processed_files}</p>
+                            <p><strong>Filename:</strong> ${data.filename}</p>
+                            <p><strong>Upload Time:</strong> ${new Date(data.upload_time).toLocaleString()}</p>
+                            <p><strong>Total Files:</strong> ${data.total_files}</p>
+                            <p><strong>Safe Files:</strong> ${data.safe_files}</p>
+                            <p><strong>Vulnerable Files:</strong> ${data.vulnerable_files}</p>
+                            <p><strong>Malicious Files:</strong> ${data.malicious_files}</p>
                         </div>
                         <div class="col-md-6">
-                            <h6>File Analysis Results</h6>
+                            <h6>Analysis Results</h6>
                             <div class="list-group">
-                                ${data.files.map(file => `
+                                ${data.vulnerability_results.map(file => `
                                     <div class="list-group-item">
                                         <div class="d-flex justify-content-between">
                                             <span>${file.file_name}</span>
-                                            <div>
-                                                ${file.is_malicious ? '<span class="badge bg-danger">Malicious</span>' : ''}
-                                                ${file.is_vulnerable ? '<span class="badge bg-warning">Vulnerable</span>' : ''}
-                                                ${!file.is_malicious && !file.is_vulnerable ? '<span class="badge bg-success">Safe</span>' : ''}
-                                            </div>
+                                            <span class="badge bg-warning">Vulnerable</span>
                                         </div>
-                                        ${file.cwe_label ? `<small class="text-muted">CWE: ${file.cwe_label}</small>` : ''}
-                                        ${file.metadata_analysis ? `<div class="mt-2"><small class="text-muted">${file.metadata_analysis.replace(/\n/g, '<br>')}</small></div>` : ''}
+                                        <small class="text-muted">CWE: ${file.cwe_label}</small>
+                                    </div>
+                                `).join('')}
+                                ${data.malicious_results.map(file => `
+                                    <div class="list-group-item">
+                                        <div class="d-flex justify-content-between">
+                                            <span>${file.file_name}</span>
+                                            <span class="badge bg-danger">Malicious</span>
+                                        </div>
+                                        <small class="text-muted">Label: ${file.malicious_label}</small>
                                     </div>
                                 `).join('')}
                             </div>
@@ -317,7 +328,7 @@
                 labels: ['Safe Files', 'Malicious Files', 'Vulnerable Files'],
                 datasets: [{
                     data: [
-                        {{ stats.total_files - stats.malicious_files - stats.vulnerable_files }},
+                        {{ stats.safe_files }},
                         {{ stats.malicious_files }},
                         {{ stats.vulnerable_files }}
                     ],

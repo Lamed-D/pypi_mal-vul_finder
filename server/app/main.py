@@ -1,21 +1,25 @@
 """
-FastAPI main application for Python Security Analysis System
+FastAPI 메인 애플리케이션 - ZIP → .py 추출 → 다중 프로세스 분석
 """
-from fastapi import FastAPI, Depends, HTTPException, UploadFile, File, Form
+import sys
+import os
+from pathlib import Path
+
+# Add server directory to Python path
+server_dir = Path(__file__).parents[1]
+sys.path.insert(0, str(server_dir))
+
+from fastapi import FastAPI, HTTPException, UploadFile, File, Request
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from fastapi.responses import HTMLResponse, JSONResponse
-from sqlalchemy.orm import Session
 import uuid
-import os
 import asyncio
 from datetime import datetime
-from pathlib import Path
 
-from database.database import get_db, AnalysisSession, AnalyzedFile, AnalysisLog, init_database
-from analysis.lstm_analyzer import LSTMAnalyzer
+from database.database import init_database, save_analysis_results, get_session_summary, get_stats, get_recent_sessions
+from analysis.integrated_lstm_analyzer import IntegratedLSTMAnalyzer
 from app.services.file_service import FileService
-from app.services.analysis_service import AnalysisService
 from config import UPLOAD_DIR, MAX_FILE_SIZE, ALLOWED_EXTENSIONS
 
 # Initialize FastAPI app
@@ -26,21 +30,22 @@ app = FastAPI(
 )
 
 # Mount static files
-app.mount("/static", StaticFiles(directory="static"), name="static")
+static_dir = Path(__file__).parents[1] / "static"
+app.mount("/static", StaticFiles(directory=str(static_dir)), name="static")
 
 # Templates
-templates = Jinja2Templates(directory="app/templates")
+templates_dir = Path(__file__).parent / "templates"
+templates = Jinja2Templates(directory=str(templates_dir))
 
-# Initialize database
+# Initialize integrated database
 init_database()
 
 # Initialize services
 file_service = FileService()
-analysis_service = AnalysisService()
-# Initialize LSTM analyzer (malicious-only minimal pipeline)
-lstm_model_path = str((Path(__file__).parents[1] / "models" / "lstm" / "model_mal.pkl").resolve())
-w2v_path = str((Path(__file__).parents[1] / "models" / "w2v" / "word2vec_withString10-6-100.model").resolve())
-lstm_analyzer = LSTMAnalyzer(lstm_model_path, w2v_path)
+
+# Initialize integrated LSTM analyzer (vulnerability + malicious)
+models_dir = str((Path(__file__).parents[1] / "models").resolve())
+integrated_analyzer = IntegratedLSTMAnalyzer(models_dir)
 
 @app.on_event("startup")
 async def startup_event():
@@ -50,34 +55,34 @@ async def startup_event():
     print("Services ready")
 
 @app.get("/", response_class=HTMLResponse)
-async def dashboard(db: Session = Depends(get_db)):
+async def dashboard():
     """Main dashboard page"""
-    # Get recent analysis sessions
-    recent_sessions = db.query(AnalysisSession).order_by(AnalysisSession.upload_time.desc()).limit(10).all()
-    
-    # Get statistics
-    total_sessions = db.query(AnalysisSession).count()
-    total_files = db.query(AnalyzedFile).count()
-    malicious_files = db.query(AnalyzedFile).filter(AnalyzedFile.is_malicious == True).count()
-    vulnerable_files = db.query(AnalyzedFile).filter(AnalyzedFile.is_vulnerable == True).count()
-    
-    stats = {
-        "total_sessions": total_sessions,
-        "total_files": total_files,
-        "malicious_files": malicious_files,
-        "vulnerable_files": vulnerable_files
-    }
-    
-    return templates.TemplateResponse("dashboard.html", {
-        "request": {},
-        "recent_sessions": recent_sessions,
-        "stats": stats
-    })
+    try:
+        # Get recent analysis sessions from integrated database
+        recent_sessions = get_recent_sessions(10)
+        
+        # Get statistics from integrated database
+        from database.database import get_stats as get_db_stats
+        stats = get_db_stats()
+        
+        print(f"DEBUG: stats type: {type(stats)}")
+        print(f"DEBUG: stats content: {stats}")
+        
+        return templates.TemplateResponse("dashboard.html", {
+            "request": {},
+            "recent_sessions": recent_sessions,
+            "stats": stats
+        })
+    except Exception as e:
+        print(f"Dashboard error: {e}")
+        import traceback
+        traceback.print_exc()
+        # Return simple error page
+        return HTMLResponse(f"<h1>Dashboard Error</h1><p>{str(e)}</p>")
 
 @app.post("/upload")
 async def upload_file_simple(
-    file: UploadFile = File(...),
-    db: Session = Depends(get_db)
+    file: UploadFile = File(...)
 ):
     """Simple upload endpoint for VS Code extension"""
     try:
@@ -100,19 +105,10 @@ async def upload_file_simple(
         # Save file
         file_path = file_service.save_uploaded_file(file_content, session_id, file.filename)
         
-        # Create analysis session
-        session = AnalysisSession(
-            id=session_id,
-            filename=file.filename,
-            file_size=len(file_content),
-            upload_time=datetime.now(),
-            status="processing"
-        )
-        db.add(session)
-        db.commit()
+        # Session will be created in integrated database after analysis
         
-        # Start analysis in background (LSTM-only)
-        asyncio.create_task(analyze_file_async(session_id, str(file_path), db))
+        # Start integrated multiprocess analysis in background
+        asyncio.create_task(analyze_file_integrated_async(session_id, str(file_path), file.filename, len(file_content)))
         
         return {
             "message": "File uploaded successfully",
@@ -122,7 +118,6 @@ async def upload_file_simple(
         }
         
     except Exception as e:
-        db.rollback()
         print(f"❌ Upload error: {str(e)}")
         print(f"❌ Error type: {type(e).__name__}")
         import traceback
@@ -132,8 +127,7 @@ async def upload_file_simple(
 
 @app.post("/api/v1/upload")
 async def upload_file(
-    file: UploadFile = File(...),
-    db: Session = Depends(get_db)
+    file: UploadFile = File(...)
 ):
     """Upload ZIP file for analysis"""
     try:
@@ -156,18 +150,10 @@ async def upload_file(
         # Save file
         file_path = file_service.save_uploaded_file(file_content, session_id, file.filename)
         
-        # Create analysis session
-        session = AnalysisSession(
-            session_id=session_id,
-            filename=file.filename,
-            file_size=len(file_content),
-            status="pending"
-        )
-        db.add(session)
-        db.commit()
+        # Session will be created in integrated database after analysis
         
-        # Start analysis in background
-        asyncio.create_task(analyze_file_async(session_id, file_path, db))
+        # Start integrated multiprocess analysis in background
+        asyncio.create_task(analyze_file_integrated_async(session_id, str(file_path), file.filename, len(file_content)))
         
         return JSONResponse({
             "session_id": session_id,
@@ -179,115 +165,190 @@ async def upload_file(
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
-async def analyze_file_async(session_id: str, file_path: str, db: Session):
-    """Background analysis task"""
+async def analyze_file_integrated_async(session_id: str, file_path: str, filename: str, file_size: int):
+    """통합 다중 프로세스 백그라운드 분석 작업 - ZIP → .py 추출 → 병렬 분석 → DB 저장"""
     try:
-        # Update session status
-        session = db.query(AnalysisSession).filter(AnalysisSession.session_id == session_id).first()
-        session.status = "processing"
-        db.commit()
+        print(f"🚀 Starting integrated multiprocess analysis for session {session_id}")
+        print(f"📦 Processing ZIP file: {filename} ({file_size} bytes)")
         
-        # Extract and analyze files
+        # 1. ZIP 파일에서 Python 파일들만 추출 (.py 확장자만, 나머지 파일 제거)
         extracted_files = await file_service.extract_zip_file(file_path)
-        session.total_files = len(extracted_files)
-        db.commit()
+        print(f"📁 Extracted {len(extracted_files)} Python files from {filename} (non-Python files filtered out)")
         
-        # Analyze each file with LSTM only
-        processed_count = 0
-        for file_info in extracted_files:
-            try:
-                # Only analyze Python files
-                if not file_info["path"].endswith('.py'):
-                    continue
-                mal_result = lstm_analyzer.analyze_mal(file_info["content"])
-                
-                analyzed_file = AnalyzedFile(
-                    session_id=session_id,
-                    file_path=file_info["path"],
-                    file_name=file_info["name"],
-                    file_size=file_info["size"],
-                    is_malicious=mal_result.get("is_malicious", False),
-                    malicious_probability=mal_result.get("malicious_probability", 0.0),
-                    lstm_label=mal_result.get("lstm_label"),
-                    lstm_probability=mal_result.get("lstm_probability"),
-                    analysis_time=mal_result.get("analysis_time", 0.0),
-                    analysis_method="lstm"
-                )
-                db.add(analyzed_file)
-                processed_count += 1
-                session.processed_files = processed_count
-                db.commit()
-            except Exception as e:
-                print(f"Error analyzing file {file_info['path']}: {e}")
-                continue
+        if not extracted_files:
+            print(f"⚠️ No Python files found in {filename}")
+            # 빈 결과로 main_log에 기록
+            upload_info = {
+                "upload_time": datetime.now(),
+                "filename": filename,
+                "file_size": file_size
+            }
+            save_analysis_results(session_id, [], upload_info)
+            return
         
-        # Mark session as completed
-        session.status = "completed"
-        db.commit()
+        # 2. 통합 다중 프로세스 분석 실행 (3개 프로세스 제한)
+        print(f"🔍 Starting multiprocess analysis with 3 workers for {len(extracted_files)} files")
+        analysis_result = await integrated_analyzer.analyze_files_multiprocess(session_id, extracted_files)
+        
+        if analysis_result["status"] == "completed":
+            # 3. 결과를 분리된 DB 테이블에 저장
+            upload_info = {
+                "upload_time": datetime.now(),
+                "filename": filename,
+                "file_size": file_size
+            }
+            
+            save_result = save_analysis_results(
+                session_id, 
+                analysis_result["results"], 
+                upload_info
+            )
+            
+            print(f"✅ Integrated analysis completed for session {session_id}")
+            print(f"📊 Results: {save_result['vulnerability_results']} vulnerable, {save_result['malicious_results']} malicious, {save_result['safe_files']} safe")
+            print(f"⏱️ Total analysis time: {save_result['total_analysis_time']:.2f} seconds")
+            print(f"💾 Results saved to: LSTM_VUL, LSTM_MAL, main_log tables")
+            
+        else:
+            print(f"❌ Integrated analysis failed for session {session_id}: {analysis_result.get('error', 'Unknown error')}")
         
     except Exception as e:
-        # Mark session as failed
-        session = db.query(AnalysisSession).filter(AnalysisSession.session_id == session_id).first()
-        session.status = "failed"
-        session.error_message = str(e)
-        db.commit()
-        print(f"Analysis failed for session {session_id}: {e}")
+        print(f"❌ Integrated analysis failed for session {session_id}: {e}")
+        import traceback
+        traceback.print_exc()
+
 
 @app.get("/session/{session_id}")
-async def get_session_detail(session_id: str, db: Session = Depends(get_db)):
-    """Get detailed session information"""
-    session = db.query(AnalysisSession).filter(AnalysisSession.id == session_id).first()
-    if not session:
-        raise HTTPException(status_code=404, detail="Session not found")
-    
-    files = db.query(AnalyzedFile).filter(AnalyzedFile.session_id == session_id).all()
-    
-    return templates.TemplateResponse("session_detail.html", {
-        "request": {},
-        "session": session,
-        "files": files
-    })
+async def get_session_detail(session_id: str, request: Request):
+    """Get detailed session information from integrated database"""
+    try:
+        # 통합 DB에서 세션 정보 조회
+        session_summary = get_session_summary(session_id)
+        
+        if not session_summary:
+            raise HTTPException(status_code=404, detail="Session not found")
+        
+        return templates.TemplateResponse("session_detail.html", {
+            "request": request,
+            "session": session_summary,
+            "files": session_summary.get("vulnerability_results", []) + session_summary.get("malicious_results", [])
+        })
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"❌ Error getting session detail: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/session/{session_id}/malicious")
+async def get_malicious_files(session_id: str, request: Request):
+    """악성 코드 분석 결과만 보여주는 페이지"""
+    try:
+        # 통합 DB에서 세션 정보 조회
+        session_summary = get_session_summary(session_id)
+        
+        if not session_summary:
+            raise HTTPException(status_code=404, detail="Session not found")
+        
+        return templates.TemplateResponse("malicious_view.html", {
+            "request": request,
+            "session": session_summary,
+            "malicious_files": session_summary.get("malicious_results", [])
+        })
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"❌ Error getting malicious files: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/session/{session_id}/vulnerable")
+async def get_vulnerable_files(session_id: str, request: Request):
+    """취약점 분석 결과만 보여주는 페이지"""
+    try:
+        # 통합 DB에서 세션 정보 조회
+        session_summary = get_session_summary(session_id)
+        
+        if not session_summary:
+            raise HTTPException(status_code=404, detail="Session not found")
+        
+        return templates.TemplateResponse("vulnerable_view.html", {
+            "request": request,
+            "session": session_summary,
+            "vulnerable_files": session_summary.get("vulnerability_results", [])
+        })
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"❌ Error getting vulnerable files: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
 
 @app.get("/api/v1/sessions")
-async def get_sessions(
-    skip: int = 0,
-    limit: int = 100,
-    db: Session = Depends(get_db)
-):
-    """Get analysis sessions"""
-    sessions = db.query(AnalysisSession).offset(skip).limit(limit).all()
-    return sessions
+async def get_sessions(skip: int = 0, limit: int = 100):
+    """Get analysis sessions from integrated database"""
+    sessions = get_recent_sessions(limit)
+    return sessions[skip:skip + limit]
 
 @app.get("/api/v1/sessions/{session_id}")
-async def get_session(session_id: str, db: Session = Depends(get_db)):
-    """Get specific analysis session with files"""
-    session = db.query(AnalysisSession).filter(AnalysisSession.session_id == session_id).first()
-    if not session:
+async def get_session(session_id: str):
+    """Get specific analysis session with files from integrated database"""
+    session_summary = get_session_summary(session_id)
+    if not session_summary:
         raise HTTPException(status_code=404, detail="Session not found")
     
-    files = db.query(AnalyzedFile).filter(AnalyzedFile.session_id == session_id).all()
-    
-    return {
-        "session": session,
-        "files": files
-    }
+    return session_summary
 
 @app.get("/api/v1/stats")
-async def get_stats(db: Session = Depends(get_db)):
-    """Get analysis statistics"""
-    total_sessions = db.query(AnalysisSession).count()
-    total_files = db.query(AnalyzedFile).count()
-    malicious_files = db.query(AnalyzedFile).filter(AnalyzedFile.is_malicious == True).count()
-    vulnerable_files = db.query(AnalyzedFile).filter(AnalyzedFile.is_vulnerable == True).count()
-    
+async def get_stats():
+    """Get analysis statistics from integrated database"""
+    try:
+        # 통합 DB에서 통계 조회
+        from database.database import get_stats as get_db_stats
+        stats = get_db_stats()
+        stats["multiprocess_active_tasks"] = integrated_analyzer.get_active_tasks_count()
+        return stats
+        
+    except Exception as e:
+        print(f"❌ Error getting stats: {e}")
+        return {
+            "total_sessions": 0,
+            "total_files": 0,
+            "malicious_files": 0,
+            "vulnerable_files": 0,
+            "safe_files": 0,
+            "malicious_rate": 0,
+            "vulnerable_rate": 0,
+            "safe_rate": 0,
+            "multiprocess_active_tasks": integrated_analyzer.get_active_tasks_count()
+        }
+
+@app.get("/api/v1/multiprocess/status")
+async def get_multiprocess_status():
+    """Get multiprocess analysis status"""
     return {
-        "total_sessions": total_sessions,
-        "total_files": total_files,
-        "malicious_files": malicious_files,
-        "vulnerable_files": vulnerable_files,
-        "malicious_rate": (malicious_files / total_files * 100) if total_files > 0 else 0,
-        "vulnerable_rate": (vulnerable_files / total_files * 100) if total_files > 0 else 0
+        "active_tasks": integrated_analyzer.get_active_tasks_count(),
+        "max_workers": 3,
+        "status": "running" if integrated_analyzer.get_active_tasks_count() > 0 else "idle"
     }
+
+@app.get("/test")
+async def test_endpoint():
+    """Test endpoint to check if server is working"""
+    try:
+        from database.database import get_stats as get_db_stats
+        stats = get_db_stats()
+        return {
+            "status": "ok",
+            "stats": stats,
+            "message": "Server is working correctly"
+        }
+    except Exception as e:
+        return {
+            "status": "error",
+            "error": str(e),
+            "message": "Server has issues"
+        }
 
 if __name__ == "__main__":
     import uvicorn

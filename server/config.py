@@ -8,8 +8,8 @@ from pathlib import Path
 BASE_DIR = Path(__file__).parent
 
 # Database settings
-DATABASE_URL = "sqlite:///./security_analysis.db"
-DATABASE_PATH = BASE_DIR / "security_analysis.db"
+DATABASE_URL = "sqlite:///./main.db"
+DATABASE_PATH = BASE_DIR / "main.db"
 
 # File upload settings
 UPLOAD_DIR = BASE_DIR / "uploads"
