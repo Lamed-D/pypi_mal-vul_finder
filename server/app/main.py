@@ -1,49 +1,78 @@
 """
-FastAPI 메인 애플리케이션 - ZIP → .py 추출 → 다중 프로세스 분석
+Python Security Analysis System - 메인 애플리케이션
+====================================================
+
+이 모듈은 Python 코드의 보안 분석을 위한 FastAPI 웹 애플리케이션의 메인 진입점입니다.
+
+주요 기능:
+- ZIP 파일 업로드 및 Python 파일 추출
+- AI 기반 취약점 및 악성코드 탐지
+- 웹 인터페이스를 통한 분석 결과 표시
+- RESTful API를 통한 데이터 제공
+
+작동 방식:
+1. 사용자가 ZIP 파일을 업로드
+2. ZIP에서 Python 파일만 추출하여 메모리에 로드
+3. LSTM AI 모델로 취약점/악성코드 분석
+4. 결과를 데이터베이스에 저장하고 웹에 표시
 """
+
 import sys
 import os
 from pathlib import Path
 
-# Add server directory to Python path
+# 서버 디렉토리를 Python 경로에 추가 (모듈 import를 위해)
 server_dir = Path(__file__).parents[1]
 sys.path.insert(0, str(server_dir))
 
+# FastAPI 및 웹 관련 라이브러리
 from fastapi import FastAPI, HTTPException, UploadFile, File, Request
-from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from fastapi.responses import HTMLResponse, JSONResponse
+
+# 유틸리티 라이브러리
 import uuid
 import asyncio
 from datetime import datetime
 
+# 내부 모듈 import
 from database.database import init_database, save_analysis_results, get_session_summary, get_stats, get_recent_sessions
 from analysis.integrated_lstm_analyzer import IntegratedLSTMAnalyzer
 from app.services.file_service import FileService
 from config import UPLOAD_DIR, MAX_FILE_SIZE, ALLOWED_EXTENSIONS
 
-# Initialize FastAPI app
+# =============================================================================
+# FastAPI 애플리케이션 초기화
+# =============================================================================
+
+# FastAPI 앱 인스턴스 생성
 app = FastAPI(
     title="Python Security Analysis System",
     description="AI-powered Python code security analysis with vulnerability and malware detection",
     version="1.0.0"
 )
 
-# Mount static files
-static_dir = Path(__file__).parents[1] / "static"
-app.mount("/static", StaticFiles(directory=str(static_dir)), name="static")
+# 정적 파일 서빙은 CDN을 통해 제공 (Bootstrap, Prism.js 등)
 
-# Templates
+# HTML 템플릿 엔진 설정 (Jinja2)
 templates_dir = Path(__file__).parent / "templates"
 templates = Jinja2Templates(directory=str(templates_dir))
 
-# Initialize integrated database
+# 템플릿에 JSON 필터 추가 (JavaScript에서 안전한 데이터 전달을 위해)
+import json
+templates.env.filters["tojson"] = json.dumps
+
+# =============================================================================
+# 서비스 및 컴포넌트 초기화
+# =============================================================================
+
+# 데이터베이스 초기화 (테이블 생성 및 연결 설정)
 init_database()
 
-# Initialize services
+# 파일 처리 서비스 초기화 (ZIP 압축 해제, 파일 검증 등)
 file_service = FileService()
 
-# Initialize integrated LSTM analyzer (vulnerability + malicious)
+# 통합 LSTM 분석기 초기화 (취약점 + 악성코드 탐지)
 models_dir = str((Path(__file__).parents[1] / "models").resolve())
 integrated_analyzer = IntegratedLSTMAnalyzer(models_dir)
 
@@ -54,20 +83,36 @@ async def startup_event():
     print("Database initialized")
     print("Services ready")
 
+# =============================================================================
+# 웹 페이지 라우트
+# =============================================================================
+
 @app.get("/", response_class=HTMLResponse)
 async def dashboard():
-    """Main dashboard page"""
+    """
+    메인 대시보드 페이지
+    
+    기능:
+    - 최근 분석 세션 목록 표시
+    - 전체 분석 통계 정보 표시
+    - 파일 업로드 인터페이스 제공
+    
+    Returns:
+        HTMLResponse: 대시보드 HTML 페이지
+    """
     try:
-        # Get recent analysis sessions from integrated database
+        # 최근 분석 세션 10개 조회 (데이터베이스에서)
         recent_sessions = get_recent_sessions(10)
         
-        # Get statistics from integrated database
+        # 전체 분석 통계 조회 (데이터베이스에서)
         from database.database import get_stats as get_db_stats
         stats = get_db_stats()
         
+        # 디버그 정보 출력 (개발 중에만 사용)
         print(f"DEBUG: stats type: {type(stats)}")
         print(f"DEBUG: stats content: {stats}")
         
+        # 대시보드 템플릿 렌더링 및 반환
         return templates.TemplateResponse("dashboard.html", {
             "request": {},
             "recent_sessions": recent_sessions,
@@ -77,37 +122,51 @@ async def dashboard():
         print(f"Dashboard error: {e}")
         import traceback
         traceback.print_exc()
-        # Return simple error page
+        # 오류 발생 시 간단한 오류 페이지 반환
         return HTMLResponse(f"<h1>Dashboard Error</h1><p>{str(e)}</p>")
 
 @app.post("/upload")
 async def upload_file_simple(
     file: UploadFile = File(...)
 ):
-    """Simple upload endpoint for VS Code extension"""
+    """
+    간단한 파일 업로드 엔드포인트 (VS Code 확장용)
+    
+    기능:
+    - ZIP 파일 업로드 및 검증
+    - 세션 ID 생성
+    - 백그라운드에서 AI 분석 시작
+    
+    Args:
+        file (UploadFile): 업로드된 ZIP 파일
+        
+    Returns:
+        dict: 업로드 성공 정보 및 세션 ID
+    """
     try:
-        # Validate file
+        # 파일명 검증
         if not file.filename:
             raise HTTPException(status_code=400, detail="No filename provided")
         
+        # 파일 확장자 검증 (ZIP 파일만 허용)
         file_extension = Path(file.filename).suffix.lower()
         if file_extension not in ALLOWED_EXTENSIONS:
             raise HTTPException(status_code=400, detail="Only ZIP files are allowed")
         
-        # Check file size
+        # 파일 크기 검증
         file_content = await file.read()
         if len(file_content) > MAX_FILE_SIZE:
             raise HTTPException(status_code=400, detail="File too large")
         
-        # Generate session ID
+        # 고유 세션 ID 생성
         session_id = str(uuid.uuid4())
         
-        # Save file
+        # 파일을 서버에 저장
         file_path = file_service.save_uploaded_file(file_content, session_id, file.filename)
         
-        # Session will be created in integrated database after analysis
+        # 분석 완료 후 통합 데이터베이스에 세션 생성됨
         
-        # Start integrated multiprocess analysis in background
+        # 백그라운드에서 통합 다중 프로세스 분석 시작
         asyncio.create_task(analyze_file_integrated_async(session_id, str(file_path), file.filename, len(file_content)))
         
         return {
@@ -331,6 +390,140 @@ async def get_multiprocess_status():
         "max_workers": 3,
         "status": "running" if integrated_analyzer.get_active_tasks_count() > 0 else "idle"
     }
+
+@app.get("/api/v1/source/{file_path:path}")
+async def get_source_code(file_path: str):
+    """Get source code for a specific file"""
+    try:
+        print(f"🔍 Requesting source code for: {file_path}")
+        
+        # 파일 경로 파싱
+        path_parts = file_path.split('/')
+        
+        # 세션 ID와 파일 경로 추출
+        if len(path_parts) >= 2:
+            # session_id/filename 형식
+            session_id = path_parts[0]
+            original_path = '/'.join(path_parts[1:])
+        else:
+            # 파일명만 있는 경우, 모든 세션에서 검색
+            session_id = None
+            original_path = file_path
+        
+        print(f"🔍 Session ID: {session_id}, File path: {original_path}")
+        
+        # 세션 ID가 있는 경우 해당 세션에서만 검색
+        if session_id:
+            upload_dir = UPLOAD_DIR / session_id
+            if not upload_dir.exists():
+                print(f"❌ Session directory not found: {upload_dir}")
+                raise HTTPException(status_code=404, detail="Session not found")
+            
+            search_dirs = [upload_dir / "extracted"]
+        else:
+            # 모든 세션에서 검색
+            search_dirs = []
+            for session_dir in UPLOAD_DIR.iterdir():
+                if session_dir.is_dir():
+                    extract_dir = session_dir / "extracted"
+                    if extract_dir.exists():
+                        search_dirs.append(extract_dir)
+        
+        file_full_path = None
+        
+        # 파일 검색
+        for extract_dir in search_dirs:
+            print(f"🔍 Searching in: {extract_dir}")
+            
+            # 파일명 정규화 (sourcepip__ -> __)
+            normalized_filename = path_parts[-1]
+            if normalized_filename.startswith("sourcepip__"):
+                # sourcepip_internallocations_distutils.py -> _distutils.py
+                if "internallocations" in normalized_filename:
+                    normalized_filename = normalized_filename.replace("sourcepip_internallocations_", "_")
+                else:
+                    normalized_filename = normalized_filename.replace("sourcepip__", "__")
+            elif normalized_filename.startswith("sourceuv__"):
+                normalized_filename = normalized_filename.replace("sourceuv__", "__")
+            
+            print(f"🔍 Original filename: {path_parts[-1]}")
+            print(f"🔍 Normalized filename: {normalized_filename}")
+            
+            # 여러 가능한 경로 시도
+            possible_paths = [
+                extract_dir / original_path,
+                extract_dir / path_parts[-1],  # 원본 파일명
+                extract_dir / normalized_filename,  # 정규화된 파일명
+            ]
+            
+            # 파일명으로 검색 (원본)
+            matching_files = list(extract_dir.rglob(f"*{path_parts[-1]}"))
+            if matching_files:
+                possible_paths.extend(matching_files)
+            
+            # 정규화된 파일명으로 검색
+            matching_files_normalized = list(extract_dir.rglob(f"*{normalized_filename}"))
+            if matching_files_normalized:
+                possible_paths.extend(matching_files_normalized)
+            
+            # 정확한 파일명으로도 검색
+            exact_files = list(extract_dir.rglob(path_parts[-1]))
+            if exact_files:
+                possible_paths.extend(exact_files)
+            
+            # 정규화된 정확한 파일명으로 검색
+            exact_files_normalized = list(extract_dir.rglob(normalized_filename))
+            if exact_files_normalized:
+                possible_paths.extend(exact_files_normalized)
+            
+            # 중복 제거
+            possible_paths = list(set(possible_paths))
+            
+            print(f"🔍 Possible paths to check: {len(possible_paths)}")
+            for i, path in enumerate(possible_paths[:10]):  # 처음 10개만 로그
+                print(f"  {i+1}. {path}")
+            
+            for path in possible_paths:
+                if path.exists() and path.is_file():
+                    file_full_path = path
+                    break
+            
+            if file_full_path:
+                break
+        
+        if not file_full_path:
+            # 디렉토리 내용 확인
+            print(f"🔍 Available files in search directories:")
+            for search_dir in search_dirs:
+                if search_dir.exists():
+                    print(f"  Directory: {search_dir}")
+                    for item in search_dir.rglob("*.py"):
+                        print(f"    - {item}")
+            raise HTTPException(status_code=404, detail=f"File not found: {original_path}")
+        
+        print(f"🔍 Found file at: {file_full_path}")
+        
+        # 파일 내용 읽기
+        try:
+            with open(file_full_path, 'r', encoding='utf-8') as f:
+                content = f.read()
+        except UnicodeDecodeError:
+            # UTF-8로 읽기 실패 시 다른 인코딩 시도
+            with open(file_full_path, 'r', encoding='latin-1') as f:
+                content = f.read()
+        
+        print(f"✅ Successfully loaded source code for {file_full_path.name}")
+        # 순수 텍스트로 반환 (JSON 직렬화 방지)
+        from fastapi.responses import PlainTextResponse
+        return PlainTextResponse(content)
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"❌ Error getting source code: {e}")
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=str(e))
 
 @app.get("/test")
 async def test_endpoint():

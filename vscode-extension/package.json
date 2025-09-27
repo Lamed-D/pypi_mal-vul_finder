@@ -18,11 +18,27 @@
     "commands": [
       {
         "command": "vscode-extension.uploadZipToLocal",
-        "title": "Python Security: Analyze Project"
+        "title": "Python Security: Analyze Project (Integrated)"
       },
       {
         "command": "vscode-extension.extractPythonPackages",
-        "title": "Python Security: Analyze Installed Packages"
+        "title": "Python Security: Analyze Installed Packages (Integrated)"
+      },
+      {
+        "command": "vscode-extension.analyzeProjectVulnerability",
+        "title": "Python Security: Analyze Project (Vulnerability Only)"
+      },
+      {
+        "command": "vscode-extension.analyzeProjectMalicious",
+        "title": "Python Security: Analyze Project (Malicious Only)"
+      },
+      {
+        "command": "vscode-extension.analyzePackagesVulnerability",
+        "title": "Python Security: Analyze Installed Packages (Vulnerability Only)"
+      },
+      {
+        "command": "vscode-extension.analyzePackagesMalicious",
+        "title": "Python Security: Analyze Installed Packages (Malicious Only)"
       }
     ]
   },

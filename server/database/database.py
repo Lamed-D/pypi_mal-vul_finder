@@ -1,8 +1,24 @@
 """
-통합 데이터베이스 - ZIP → .py 추출 → 다중 프로세스 분석 → 분리된 테이블 저장
-- LSTM_VUL: 취약점 분석 결과 (safepy_3)
-- LSTM_MAL: 악성 코드 분석 결과 (safepy_3_malicious)  
-- main_log: 안전한 파일 요약 로그
+통합 데이터베이스 모듈 - AI 분석 결과 저장 및 관리
+=================================================
+
+이 모듈은 Python 코드의 보안 분석 결과를 저장하고 관리하는 데이터베이스 시스템입니다.
+
+데이터베이스 구조:
+- lstm_vul: 취약점 분석 결과 테이블
+- lstm_mal: 악성코드 분석 결과 테이블  
+- main_log: 분석 세션 요약 로그 테이블
+
+주요 기능:
+- 분석 결과 저장 및 조회
+- 세션별 데이터 관리
+- 통계 정보 제공
+- 데이터 무결성 보장
+
+사용 기술:
+- SQLAlchemy ORM
+- SQLite 데이터베이스
+- 비동기 데이터 처리
 """
 from sqlalchemy import create_engine, Column, Integer, String, Float, DateTime, Boolean, Text
 from sqlalchemy.ext.declarative import declarative_base
@@ -197,36 +213,36 @@ def get_session_summary(session_id: str) -> Optional[Dict[str, Any]]:
         
         return {
             "session_id": session_id,
-            "upload_time": log_record.upload_time,
+            "upload_time": log_record.upload_time.isoformat() if log_record.upload_time else None,
             "filename": log_record.filename,
-            "file_size": log_record.file_size,
+            "file_size": int(log_record.file_size) if log_record.file_size else 0,
             "analysis_model": log_record.analysis_model,
-            "analysis_duration": log_record.analysis_duration,
-            "total_files": log_record.total_files,
-            "safe_files": log_record.safe_files,
-            "vulnerable_files": log_record.vulnerable_files,
-            "malicious_files": log_record.malicious_files,
-            "is_safe": log_record.is_safe,
+            "analysis_duration": float(log_record.analysis_duration) if log_record.analysis_duration else 0.0,
+            "total_files": int(log_record.total_files) if log_record.total_files else 0,
+            "safe_files": int(log_record.safe_files) if log_record.safe_files else 0,
+            "vulnerable_files": int(log_record.vulnerable_files) if log_record.vulnerable_files else 0,
+            "malicious_files": int(log_record.malicious_files) if log_record.malicious_files else 0,
+            "is_safe": bool(log_record.is_safe) if log_record.is_safe is not None else True,
             "vulnerability_results": [
                 {
-                    "file_path": record.file_path,
-                    "file_name": record.file_name,
-                    "vulnerability_status": record.vulnerability_status,
-                    "vulnerability_probability": record.vulnerability_probability,
-                    "vulnerability_label": record.vulnerability_label,
-                    "cwe_label": record.cwe_label,
-                    "analysis_time": record.analysis_time
+                    "file_path": str(record.file_path) if record.file_path else "",
+                    "file_name": str(record.file_name) if record.file_name else "",
+                    "vulnerability_status": str(record.vulnerability_status) if record.vulnerability_status else "",
+                    "vulnerability_probability": float(record.vulnerability_probability) if record.vulnerability_probability else 0.0,
+                    "vulnerability_label": str(record.vulnerability_label) if record.vulnerability_label else "",
+                    "cwe_label": str(record.cwe_label) if record.cwe_label else "",
+                    "analysis_time": float(record.analysis_time) if record.analysis_time else 0.0
                 }
                 for record in vul_records
             ],
             "malicious_results": [
                 {
-                    "file_path": record.file_path,
-                    "file_name": record.file_name,
-                    "malicious_status": record.malicious_status,
-                    "malicious_probability": record.malicious_probability,
-                    "malicious_label": record.malicious_label,
-                    "analysis_time": record.analysis_time
+                    "file_path": str(record.file_path) if record.file_path else "",
+                    "file_name": str(record.file_name) if record.file_name else "",
+                    "malicious_status": str(record.malicious_status) if record.malicious_status else "",
+                    "malicious_probability": float(record.malicious_probability) if record.malicious_probability else 0.0,
+                    "malicious_label": str(record.malicious_label) if record.malicious_label else "",
+                    "analysis_time": float(record.analysis_time) if record.analysis_time else 0.0
                 }
                 for record in mal_records
             ]
