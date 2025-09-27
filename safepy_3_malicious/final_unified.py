@@ -37,11 +37,30 @@ from google.cloud import bigquery
 from google.oauth2 import service_account
 from google.api_core import exceptions as gcp_exceptions
 
-# 경고 메시지 숨기기
+# 경고 메시지 숨기기 및 성능 최적화
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2'  # TensorFlow 경고 메시지 숨기기
 os.environ['TF_ENABLE_ONEDNN_OPTS'] = '0'  # oneDNN 최적화 비활성화
+os.environ['TF_FORCE_GPU_ALLOW_GROWTH'] = 'true'  # GPU 메모리 점진적 할당
+os.environ['TF_GPU_THREAD_MODE'] = 'gpu_private'  # GPU 스레드 모드 최적화
 import warnings
 warnings.filterwarnings('ignore')  # 모든 경고 메시지 숨기기
+
+# TensorFlow GPU 메모리 최적화
+try:
+    import tensorflow as tf
+    # GPU가 사용 가능한 경우 메모리 증가 허용
+    gpus = tf.config.experimental.list_physical_devices('GPU')
+    if gpus:
+        try:
+            for gpu in gpus:
+                tf.config.experimental.set_memory_growth(gpu, True)
+                tf.config.experimental.set_virtual_device_configuration(
+                    gpu, [tf.config.experimental.VirtualDeviceConfiguration(memory_limit=1024)]
+                )
+        except RuntimeError:
+            pass  # 이미 초기화된 경우 무시
+except ImportError:
+    pass
 
 # LSTM 관련 import
 try:
@@ -50,7 +69,18 @@ try:
 except ImportError:
     HAS_CHARDET = False
 
-from tensorflow.keras import backend as K
+# 케라스 import - 호환성을 위한 다중 방식 시도
+try:
+    from tensorflow.keras import backend as K
+    from tensorflow import keras
+except ImportError:
+    try:
+        import keras
+        from keras import backend as K
+    except ImportError:
+        print("케라스 모듈을 찾을 수 없습니다. 호환 모드로 실행됩니다.")
+        K = None
+        keras = None
 
 # preprocess import 시 출력 메시지 임시 숨기기
 import sys
@@ -91,6 +121,57 @@ class FinalUnifiedAnalyzer:
         self.df = None
         self.lstm_results = None
         
+    def read_python_file_with_encoding(self, file_path):
+        """다양한 인코딩을 시도하여 Python 파일 읽기"""
+        # 시도할 인코딩 리스트 (우선순위 순서)
+        encodings = ['utf-8', 'utf-8-sig', 'cp949', 'euc-kr', 'latin-1', 'iso-8859-1', 'utf-16', 'ascii']
+        
+        # chardet으로 인코딩 감지 시도
+        if HAS_CHARDET:
+            try:
+                with open(file_path, 'rb') as f:
+                    raw_data = f.read(10000)  # 처음 10KB만 읽어서 감지
+                    detected = chardet.detect(raw_data)
+                    if detected['encoding'] and detected['confidence'] > 0.7:
+                        detected_encoding = detected['encoding']
+                        # 감지된 인코딩을 리스트 맨 앞으로
+                        if detected_encoding not in encodings:
+                            encodings.insert(0, detected_encoding)
+                        elif encodings.index(detected_encoding) > 0:
+                            encodings.remove(detected_encoding)
+                            encodings.insert(0, detected_encoding)
+                        print(f"[인코딩 감지] {file_path}: {detected_encoding} (신뢰도: {detected['confidence']:.2f})")
+            except Exception as e:
+                print(f"[인코딩 감지 실패] {file_path}: {e}")
+        
+        # 각 인코딩으로 파일 읽기 시도
+        for encoding in encodings:
+            try:
+                with open(file_path, 'r', encoding=encoding, errors='replace') as f:
+                    content = f.read()
+                    # 성공적으로 읽었는지 확인 (replace 모드에서도 의미있는 내용인지)
+                    if content.strip() and not ('�' in content and content.count('�') > len(content) * 0.1):
+                        return content
+            except (UnicodeDecodeError, UnicodeError):
+                continue
+            except Exception as e:
+                print(f"⚠️ {file_path} 읽기 오류 ({encoding}): {e}")
+                continue
+        
+        # 모든 인코딩 실패 시 바이너리 모드로 읽어서 ASCII 부분만 추출
+        try:
+            with open(file_path, 'rb') as f:
+                raw_data = f.read()
+                # ASCII 문자만 추출하여 기본적인 코드 구조 유지
+                ascii_content = ''.join(chr(b) if 32 <= b <= 126 or b in [9, 10, 13] else ' ' for b in raw_data)
+                if ascii_content.strip():
+                    print(f"⚠️ {file_path}: ASCII 모드로 읽기 (일부 문자 손실 가능)")
+                    return ascii_content
+        except Exception as e:
+            print(f"❌ {file_path}: 모든 읽기 방법 실패 - {e}")
+        
+        return None
+
     def remove_comments(self, code):
         """소스 코드에서 주석 제거"""
         # 여러 줄 주석 제거
@@ -113,13 +194,10 @@ class FinalUnifiedAnalyzer:
                     for file in files:
                         if file.endswith('.py'):
                             file_path = os.path.join(root, file)
-                            try:
-                                with open(file_path, 'r', encoding='utf-8') as f:
-                                    raw_code = f.read()
-                                    cleaned_code = self.remove_comments(raw_code)
-                                    merged_code += cleaned_code + '\n'
-                            except Exception as e:
-                                print(f"⚠️ {file_path} 읽기 실패: {e}")
+                            raw_code = self.read_python_file_with_encoding(file_path)
+                            if raw_code:
+                                cleaned_code = self.remove_comments(raw_code)
+                                merged_code += cleaned_code + '\n'
                 if merged_code.strip():
                     rows.append([dir_name, merged_code.strip()])
         return rows
@@ -131,13 +209,32 @@ class FinalUnifiedAnalyzer:
             os.makedirs(self.result_dir, exist_ok=True)
             output_file = os.path.join(self.result_dir, output_file)
         
-        with open(output_file, 'w', newline='', encoding='utf-8') as f:
-            writer = csv.writer(f)
-            writer.writerow(['Directory', 'MergedCodeWithoutComments'])
-            writer.writerows(data)
+        try:
+            with open(output_file, 'w', newline='', encoding='utf-8-sig') as f:
+                writer = csv.writer(f)
+                # LSTM 분석과 호환되도록 컬럼명 통일
+                writer.writerow(['package', 'code'])
+                for row in data:
+                    # 데이터 검증 후 저장
+                    if len(row) >= 2 and row[1]:
+                        writer.writerow([row[0], row[1]])
+            print(f"✅ CSV 파일 저장 성공: {output_file}")
+        except Exception as e:
+            print(f"❌ CSV 파일 저장 실패: {e}")
+            # 대체 인코딩으로 재시도
+            try:
+                with open(output_file, 'w', newline='', encoding='cp949') as f:
+                    writer = csv.writer(f)
+                    writer.writerow(['package', 'code'])
+                    for row in data:
+                        if len(row) >= 2 and row[1]:
+                            writer.writerow([row[0], row[1]])
+                print(f"✅ CSV 파일 저장 성공 (CP949): {output_file}")
+            except Exception as e2:
+                print(f"❌ CSV 파일 저장 최종 실패: {e2}")
 
     def extract_zip_and_process_source(self):
-        """ZIP 파일 압축 해제 및 소스코드 처리"""
+        """ZIP 파일 압축 해제 및 소스코드 처리 (강화된 오류 처리)"""
         zip_dir = "./python-packages-1757531529324.zip"
         extract_dir = "./extracted_files"
         
@@ -145,17 +242,35 @@ class FinalUnifiedAnalyzer:
             print(f"Warning: ZIP 파일을 찾을 수 없습니다: {zip_dir}")
             return None
         
-        # 압축 해제
-        with zipfile.ZipFile(zip_dir, 'r') as zip_ref:
-            zip_ref.extractall(extract_dir)
+        try:
+            # 압축 해제
+            print("🔄 ZIP 파일 압축 해제 중...")
+            with zipfile.ZipFile(zip_dir, 'r') as zip_ref:
+                zip_ref.extractall(extract_dir)
+            print(f"✅ ZIP 파일 압축 해제 완료: {extract_dir}")
+        except Exception as e:
+            print(f"❌ ZIP 파일 압축 해제 실패: {e}")
+            return None
         
         # 소스코드 처리
         root_path = './extracted_files/source'
         if os.path.exists(root_path):
+            print(f"🔍 소스코드 디렉토리 스캔: {root_path}")
             data = self.process_directory(root_path)
-            self.save_to_csv(data)
-            print(f"✅ CSV 저장 완료: {len(data)}개 디렉터리 처리됨")
-            return data
+            
+            if data:
+                self.save_to_csv(data)
+                print(f"✅ 소스코드 처리 완료: {len(data)}개 패키지")
+                
+                # 통계 정보 출력
+                total_code_length = sum(len(row[1]) for row in data)
+                avg_code_length = total_code_length / len(data) if data else 0
+                print(f"📊 통계 - 총 코드 길이: {total_code_length:,} 문자, 평균: {avg_code_length:,.0f} 문자/패키지")
+                
+                return data
+            else:
+                print("⚠️ 처리된 소스코드가 없습니다.")
+                return None
         else:
             print(f"Warning: 소스 경로를 찾을 수 없습니다: {root_path}")
             return None
@@ -170,23 +285,27 @@ class FinalUnifiedAnalyzer:
         return None, None
 
     def parse_metadata(self, file_path):
-        """메타데이터 파싱"""
+        """메타데이터 파싱 (다양한 인코딩 지원)"""
         target_keys = {
             "name", "summary", "author", "author-email", "version",
             "maintainer", "maintainer-email"
         }
         metadata = {}
+        
+        # 메타데이터 파일을 다양한 인코딩으로 읽기 시도
+        content = self.read_metadata_file_with_encoding(file_path)
+        if not content:
+            return metadata
 
         try:
-            with open(file_path, 'r', encoding='utf-8', errors='ignore') as f:
-                for line in f:
-                    line = line.strip()
-                    if ':' in line:
-                        key, value = map(str.strip, line.split(':', 1))
-                        key_lower = key.lower()
-                        
-                        if key_lower in target_keys:
-                            metadata[key_lower] = value
+            for line in content.split('\n'):
+                line = line.strip()
+                if ':' in line:
+                    key, value = map(str.strip, line.split(':', 1))
+                    key_lower = key.lower()
+                    
+                    if key_lower in target_keys:
+                        metadata[key_lower] = value
 
             # author가 없거나 값이 비어 있을 경우
             if not metadata.get("author"):
@@ -211,25 +330,86 @@ class FinalUnifiedAnalyzer:
             
         return metadata
 
+    def read_metadata_file_with_encoding(self, file_path):
+        """메타데이터 파일을 다양한 인코딩으로 읽기"""
+        # 메타데이터 파일은 보통 ASCII/UTF-8이지만 다양한 인코딩 시도
+        encodings = ['utf-8', 'utf-8-sig', 'ascii', 'latin-1', 'cp949', 'euc-kr', 'iso-8859-1']
+        
+        # chardet으로 인코딩 감지 시도
+        if HAS_CHARDET:
+            try:
+                with open(file_path, 'rb') as f:
+                    raw_data = f.read()
+                    detected = chardet.detect(raw_data)
+                    if detected['encoding'] and detected['confidence'] > 0.6:
+                        detected_encoding = detected['encoding']
+                        # 감지된 인코딩을 리스트 맨 앞으로
+                        if detected_encoding not in encodings:
+                            encodings.insert(0, detected_encoding)
+                        elif encodings.index(detected_encoding) > 0:
+                            encodings.remove(detected_encoding)
+                            encodings.insert(0, detected_encoding)
+            except Exception:
+                pass
+        
+        # 각 인코딩으로 파일 읽기 시도
+        for encoding in encodings:
+            try:
+                with open(file_path, 'r', encoding=encoding, errors='replace') as f:
+                    content = f.read()
+                    # replace 모드에서도 의미있는 내용인지 확인
+                    if content.strip() and not ('\ufffd' in content and content.count('\ufffd') > len(content) * 0.1):
+                        return content
+            except Exception:
+                continue
+        
+        print(f"⚠️ {file_path}: 메타데이터 읽기 실패 - 모든 인코딩 시도 실패")
+        return None
+
     def extract_and_parse_metadata(self):
-        """메타데이터 추출 및 파싱"""
+        """메타데이터 추출 및 파싱 (강화된 오류 처리)"""
         extract_dir = "./extracted_files"
         metadata_dir = os.path.join(extract_dir, "metadata")
         
         if not os.path.exists(metadata_dir):
             print(f"Warning: 메타데이터 디렉토리를 찾을 수 없습니다: {metadata_dir}")
             return []
-            
+        
+        print(f"🔍 메타데이터 디렉토리 스캔: {metadata_dir}")
         meta_datas = []
-        for file in os.listdir(metadata_dir):
-            if file.endswith(".txt"):
-                metadata_path = os.path.join(metadata_dir, file)
+        failed_files = []
+        
+        metadata_files = [f for f in os.listdir(metadata_dir) if f.endswith(".txt")]
+        print(f"📁 발견된 메타데이터 파일: {len(metadata_files)}개")
+        
+        for file in metadata_files:
+            metadata_path = os.path.join(metadata_dir, file)
+            try:
                 metadata = self.parse_metadata(metadata_path)
-                if metadata:
+                if metadata and metadata.get('name'):  # 최소한 이름이 있는지 확인
                     meta_datas.append(metadata)
+                else:
+                    failed_files.append(f"{file} (파싱된 데이터 없음)")
+            except Exception as e:
+                failed_files.append(f"{file} ({str(e)})")
+                print(f"⚠️ 메타데이터 파일 처리 실패: {file} - {e}")
         
         self.meta_datas = meta_datas
-        print(f"✅ 메타데이터 파싱 완료: {len(meta_datas)}개")
+        
+        # 결과 요약
+        print(f"✅ 메타데이터 파싱 완료: {len(meta_datas)}개 성공")
+        if failed_files:
+            print(f"⚠️ 실패한 파일: {len(failed_files)}개")
+            for fail in failed_files[:5]:  # 처음 5개만 출력
+                print(f"   - {fail}")
+            if len(failed_files) > 5:
+                print(f"   ... 외 {len(failed_files) - 5}개 더")
+        
+        # 메타데이터 품질 검사
+        if meta_datas:
+            complete_metadata = sum(1 for md in meta_datas if all(md.get(key) for key in ['name', 'version', 'summary']))
+            print(f"📊 완전한 메타데이터: {complete_metadata}/{len(meta_datas)}개")
+        
         return meta_datas
 
     def get_pepy_downloads(self, package_name, api_key):
@@ -412,30 +592,188 @@ class FinalUnifiedAnalyzer:
         return None
 
     def load_lstm_models(self):
-        """LSTM 모델과 라벨 인코더 로드"""
+        """LSTM 모델과 라벨 인코더 로드 - 반드시 기존 모델 사용"""
         global model_mal, label_encoder_mal
         
         try:
             model_path = os.path.join(self.model_save_dir, 'model_mal.pkl')
-            with open(model_path, 'rb') as f:
-                model_mal = pickle.load(f)
-            print("LSTM 모델 로드 성공")
             
-            # GPU 최적화 설정 (조용히 처리)
+            # TensorFlow/Keras 호환성을 위한 설정
+            import tensorflow as tf
+            from tensorflow import keras
+            import pickle
             try:
-                import tensorflow as tf
+                import dill
+                HAS_DILL = True
+            except ImportError:
+                HAS_DILL = False
+            import sys
+            
+            print("기존 모델 파일 로드 중...")
+            
+            # Keras 호환성 처리를 위한 모듈 매핑
+            def setup_keras_compatibility():
+                """케라스 호환성을 위한 모듈 설정"""
+                compatibility_mappings = {
+                    'keras.src.models.sequential': 'keras.models',
+                    'keras.src.models.model': 'keras.models', 
+                    'keras.src.layers': 'keras.layers',
+                    'keras.src.layers.core': 'keras.layers',
+                    'keras.src.layers.dense': 'keras.layers',
+                    'keras.src.layers.rnn': 'keras.layers',
+                    'keras.src.layers.rnn.lstm': 'keras.layers',
+                    'keras.src.layers.dropout': 'keras.layers',
+                    'keras.src.optimizers': 'keras.optimizers',
+                    'keras.src.optimizers.adam': 'keras.optimizers',
+                    'keras.src.losses': 'keras.losses',
+                    'keras.src.metrics': 'keras.metrics',
+                    'keras.src.activations': 'keras.activations',
+                    'keras.src.regularizers': 'keras.regularizers',
+                    'keras.src.constraints': 'keras.constraints',
+                    'keras.src.initializers': 'keras.initializers',
+                    'keras.src.callbacks': 'keras.callbacks',
+                    'keras.src.utils': 'keras.utils',
+                    'keras.src.engine': 'keras.engine',
+                    'keras.src.engine.sequential': 'keras.models',
+                    'keras.src.saving': 'keras.utils'
+                }
+                
+                old_modules = {}
+                for old_path, new_path in compatibility_mappings.items():
+                    if old_path not in sys.modules:
+                        try:
+                            # 새 모듈을 가져와서 이전 경로에 매핑
+                            parts = new_path.split('.')
+                            module = __import__(parts[0])
+                            for part in parts[1:]:
+                                if hasattr(module, part):
+                                    module = getattr(module, part)
+                                else:
+                                    break
+                            
+                            sys.modules[old_path] = module
+                            old_modules[old_path] = True
+                            
+                        except (ImportError, AttributeError) as e:
+                            print(f"모듈 매핑 실패: {old_path} -> {new_path}: {e}")
+                            pass
+                            
+                return old_modules
+            
+            # 방법 1: 호환성 설정 후 표준 pickle 로드
+            print("방법 1: 호환성 매핑 + 표준 pickle")
+            old_modules = setup_keras_compatibility()
+            
+            try:
+                with open(model_path, 'rb') as f:
+                    model_mal = pickle.load(f)
+                print("✅ 호환성 매핑으로 기존 모델 로드 성공!")
+                
+            except Exception as e:
+                print(f"❌ 호환성 매핑 + pickle 실패: {str(e)}")
+                
+                # 방법 2: Sequential 클래스 패치
+                print("방법 2: Sequential 클래스 직접 패치")
+                try:
+                    from keras.models import Sequential
+                    
+                    # Sequential 클래스에 _unpickle_model 메서드 추가
+                    if not hasattr(Sequential, '_unpickle_model'):
+                        def _unpickle_model(cls, state):
+                            model = cls()
+                            model.__dict__.update(state)
+                            return model
+                        Sequential._unpickle_model = classmethod(_unpickle_model)
+                    
+                    with open(model_path, 'rb') as f:
+                        model_mal = pickle.load(f)
+                    print("✅ Sequential 패치로 기존 모델 로드 성공!")
+                    
+                except Exception as e:
+                    print(f"❌ Sequential 패치 실패: {str(e)}")
+                    
+                    # 방법 3: dill 시도
+                    print("방법 3: dill 로드")
+                    try:
+                        if not HAS_DILL:
+                            raise ImportError("dill 패키지가 설치되지 않음")
+                        with open(model_path, 'rb') as f:
+                            model_mal = dill.load(f)
+                        print("✅ dill로 기존 모델 로드 성공!")
+                        
+                    except Exception as e:
+                        print(f"❌ dill 로드 실패: {str(e)}")
+                        
+                        # 방법 4: 케라스 네이티브 로드 시도
+                        print("방법 4: Keras 네이티브 로드")
+                        try:
+                            # H5 또는 SavedModel 형식으로 저장된 모델이 있는지 확인
+                            h5_path = model_path.replace('.pkl', '.h5')
+                            savedmodel_path = model_path.replace('.pkl', '_savedmodel')
+                            
+                            if os.path.exists(h5_path):
+                                model_mal = keras.models.load_model(h5_path)
+                                print("✅ H5 형식으로 기존 모델 로드 성공!")
+                            elif os.path.exists(savedmodel_path):
+                                model_mal = keras.models.load_model(savedmodel_path)
+                                print("✅ SavedModel 형식으로 기존 모델 로드 성공!")
+                            else:
+                                raise FileNotFoundError("H5 또는 SavedModel 파일을 찾을 수 없습니다.")
+                                
+                        except Exception as e:
+                            print(f"❌ Keras 네이티브 로드 실패: {str(e)}")
+                            
+                            # 최후 방법: 직접 바이트 조작
+                            print("방법 5: 직접 바이트 조작 시도")
+                            try:
+                                with open(model_path, 'rb') as f:
+                                    data = f.read()
+                                
+                                # pickle 헤더에서 keras.src를 keras로 교체
+                                modified_data = data.replace(b'keras.src.', b'keras.')
+                                
+                                # 임시 파일로 저장하고 로드
+                                temp_path = model_path + '.temp'
+                                with open(temp_path, 'wb') as f:
+                                    f.write(modified_data)
+                                
+                                with open(temp_path, 'rb') as f:
+                                    model_mal = pickle.load(f)
+                                
+                                os.remove(temp_path)  # 임시 파일 삭제
+                                print("✅ 바이트 조작으로 기존 모델 로드 성공!")
+                                
+                            except Exception as e:
+                                print(f"❌ 모든 방법 실패: {str(e)}")
+                                raise Exception("기존 모델을 로드할 수 없습니다. 모든 시도 방법이 실패했습니다.")
+            
+            # 모듈 정리
+            for module_name in old_modules:
+                if module_name in sys.modules:
+                    del sys.modules[module_name]
+            
+            # 모델 로드 확인
+            if model_mal is None:
+                raise Exception("모델 로드 후에도 model_mal이 None입니다.")
+                
+            print("✅ 기존 LSTM 모델 로드 완료!")
+            print(f"모델 타입: {type(model_mal)}")
+            
+            # GPU 최적화 설정
+            try:
                 if tf.config.list_physical_devices('GPU'):
                     gpus = tf.config.experimental.list_physical_devices('GPU')
                     if gpus:
                         for gpu in gpus:
                             tf.config.experimental.set_memory_growth(gpu, True)
             except Exception:
-                pass  # 조용히 무시
+                pass
             
         except Exception as e:
             print(f"LSTM 모델 로드 실패: {e}")
             return False
         
+        # 라벨 인코더 로드
         try:
             encoder_path = os.path.join(self.model_save_dir, 'label_encoder_mal.pkl')
             with open(encoder_path, 'rb') as f:
@@ -461,57 +799,46 @@ class FinalUnifiedAnalyzer:
             if w2v_model is None:
                 return {
                     'vulnerability_status': 'Error',
-                    'cwe_label': 'model_error',
+                    'cwe_label': 'word2vec_error',
                     'confidence': 0.0
                 }
             
-            embedded_code = embed_sequences([tokenized_code], w2v_model)
+            # 벡터 임베딩
+            padded_code = embed_sequences([tokenized_code], w2v_model, max_length=100)
             
-            if not embedded_code or len(embedded_code) == 0 or embedded_code[0].size == 0:
+            if padded_code is None or len(padded_code) == 0:
                 return {
                     'vulnerability_status': 'Error',
                     'cwe_label': 'embedding_error',
                     'confidence': 0.0
                 }
             
-            # 시퀀스 패딩
-            max_sequence_length = 100
-            embedding_dim = w2v_model.vector_size
-            padded_code = np.zeros((max_sequence_length, embedding_dim))
-            
-            embedded_sequence = embedded_code[0]
-            if embedded_sequence.shape[0] > 0:
-                if embedded_sequence.shape[0] < max_sequence_length:
-                    padded_code[:embedded_sequence.shape[0], :] = embedded_sequence
-                else:
-                    padded_code = embedded_sequence[:max_sequence_length, :]
-            
-            padded_code = np.expand_dims(padded_code, axis=0)
-            
-            # 모델 예측
+            # LSTM 예측
             prediction = model_mal.predict(padded_code, verbose=0)
             
-            if prediction.ndim == 2 and prediction.shape[1] == 1:
-                confidence = float(prediction[0][0])
-                predicted_index = int((prediction > 0.5).astype(int)[0][0])
-            else:
-                predicted_index = int(np.argmax(prediction, axis=1)[0])
-                confidence = float(prediction[0][predicted_index])
-            
-            try:
-                decoded_label = label_encoder_mal.inverse_transform([predicted_index])[0]
-            except Exception as e:
+            if prediction is None or len(prediction) == 0:
                 return {
                     'vulnerability_status': 'Error',
-                    'cwe_label': 'label_decode_error',
-                    'confidence': confidence
+                    'cwe_label': 'prediction_error',
+                    'confidence': 0.0
                 }
             
-            benign_aliases = {"Benign", "benign", "Not Vulnerable", "Normal", "Safe", "0", 0}
-            is_vulnerable = decoded_label not in benign_aliases
+            # 결과 해석
+            predicted_class = np.argmax(prediction, axis=1)[0]
+            confidence = float(np.max(prediction))
             
-            vulnerability_status = 'Vulnerable' if is_vulnerable else 'Not Vulnerable'
-            cwe_label = str(decoded_label) if is_vulnerable else 'Benign'
+            # 라벨 인코더로 클래스 이름 변환
+            if label_encoder_mal is not None:
+                try:
+                    cwe_label = label_encoder_mal.inverse_transform([predicted_class])[0]
+                except Exception as e:
+                    print(f"라벨 디코딩 오류: {e}")
+                    cwe_label = f'class_{predicted_class}'
+            else:
+                cwe_label = f'class_{predicted_class}'
+            
+            # 취약점 상태 결정
+            vulnerability_status = 'Vulnerable' if confidence > 0.5 else 'Safe'
             
             return {
                 'vulnerability_status': vulnerability_status,
@@ -528,7 +855,7 @@ class FinalUnifiedAnalyzer:
             }
 
     def analyze_lstm_codes(self, source_csv='merged_sourceCode.csv'):
-        """CSV 파일의 모든 코드를 LSTM으로 분석"""
+        """CSV 파일의 모든 코드를 LSTM으로 분석 (메모리 최적화 포함)"""
         csv_path = os.path.join(self.result_dir, source_csv)  # result 폴더에서 찾도록 수정
         
         if not os.path.exists(csv_path):
@@ -567,11 +894,32 @@ class FinalUnifiedAnalyzer:
                 }
             
             results.append(result_row)
+            
+            # 주기적 메모리 정리 (10개 분석마다)
+            if (idx + 1) % 10 == 0:
+                try:
+                    gc.collect()  # 가비지 컬렉션 실행
+                    # Keras 세션 정리 (가능한 경우)
+                    try:
+                        K.clear_session()
+                        print(f"[메모리 정리] {idx + 1}개 분석 완료 후 세션 정리")
+                    except Exception:
+                        pass
+                except Exception:
+                    pass
         
         end_time = time.time()
         total_time = end_time - start_time
         
         result_df = pd.DataFrame(results)
+        
+        # 최종 메모리 정리
+        try:
+            gc.collect()
+            K.clear_session()
+            print("[최종 정리] 메모리 및 세션 정리 완료")
+        except Exception:
+            pass
         
         print(f"\n=== LSTM 분석 완료 ===")
         print(f"총 소요 시간: {total_time:.2f}초")
@@ -876,95 +1224,195 @@ class FinalUnifiedAnalyzer:
         print("메모리 정리 완료")
 
 def main():
-    """메인 실행 함수"""
+    """메인 실행 함수 (안정성 강화)"""
     print("=== Python 패키지 보안 분석 도구 (Final Unified) ===\n")
     
     analyzer = FinalUnifiedAnalyzer()
+    successful_steps = []
     
     try:
+        # 0. 초기 환경 확인 및 설정
+        print("0️⃣ 초기 환경 설정 및 확인...")
+        try:
+            # TensorFlow 초기화 확인
+            import tensorflow as tf
+            print(f"[환경 확인] TensorFlow 버전: {tf.__version__}")
+            if tf.config.list_physical_devices('GPU'):
+                print("[환경 확인] GPU 사용 가능")
+            else:
+                print("[환경 확인] CPU 모드로 실행")
+        except Exception as env_error:
+            print(f"[환경 경고] TensorFlow 설정 이슈: {env_error}")
+        
         # 1. ZIP 파일 해제 및 소스코드 추출
-        print("1️⃣ ZIP 파일 해제 및 소스코드 추출...")
-        source_data = analyzer.extract_zip_and_process_source()
-        if source_data is None:
-            print("❌ 소스코드 추출 실패")
+        print("\n1️⃣ ZIP 파일 해제 및 소스코드 추출...")
+        try:
+            source_data = analyzer.extract_zip_and_process_source()
+            if source_data is None:
+                print("❌ 소스코드 추출 실패 - ZIP 파일 또는 소스 경로 확인 필요")
+                return
+            successful_steps.append("소스코드 추출")
+            print(f"✅ 소스코드 추출 성공: {len(source_data)}개 패키지")
+        except Exception as e:
+            print(f"❌ 소스코드 추출 중 오류: {e}")
             return
         
         # 2. 메타데이터 추출 및 파싱
         print("\n2️⃣ 메타데이터 추출 및 파싱...")
-        meta_data = analyzer.extract_and_parse_metadata()
-        if not meta_data:
-            print("❌ 메타데이터 추출 실패")
+        try:
+            meta_data = analyzer.extract_and_parse_metadata()
+            if not meta_data:
+                print("❌ 메타데이터 추출 실패 - metadata 폴더 확인 필요")
+                return
+            successful_steps.append("메타데이터 추출")
+            print(f"✅ 메타데이터 추출 성공: {len(meta_data)}개 패키지")
+        except Exception as e:
+            print(f"❌ 메타데이터 추출 중 오류: {e}")
             return
         
         # 3. 메타데이터 전처리
         print("\n3️⃣ 메타데이터 전처리...")
-        df = analyzer.preprocess_metadata()
-        if df is None:
-            print("❌ 메타데이터 전처리 실패")
+        try:
+            df = analyzer.preprocess_metadata()
+            if df is None:
+                print("❌ 메타데이터 전처리 실패")
+                return
+            successful_steps.append("메타데이터 전처리")
+            print(f"✅ 메타데이터 전처리 성공: {len(df)}개 패키지")
+        except Exception as e:
+            print(f"❌ 메타데이터 전처리 중 오류: {e}")
             return
         
-        # 4. LSTM 모델 로드
+        # 4. LSTM 모델 로드 (재시도 메커니즘)
         print("\n4️⃣ LSTM 모델 로드...")
-        if not analyzer.load_lstm_models():
-            print("❌ LSTM 모델 로드 실패")
+        lstm_load_success = False
+        for attempt in range(3):
+            try:
+                print(f"[시도 {attempt + 1}/3] 모델 로드 중...")
+                if analyzer.load_lstm_models():
+                    lstm_load_success = True
+                    successful_steps.append("LSTM 모델 로드")
+                    print("✅ LSTM 모델 로드 성공")
+                    break
+                else:
+                    print(f"[시도 {attempt + 1}/3] 모델 로드 실패, 재시도...")
+                    time.sleep(1)
+            except Exception as e:
+                print(f"[시도 {attempt + 1}/3] 모델 로드 오류: {e}")
+                if attempt < 2:
+                    print("재시도 중...")
+                    time.sleep(2)
+                    
+        if not lstm_load_success:
+            print("❌ LSTM 모델 로드 실패 - model_mal.pkl 및 label_encoder_mal.pkl 파일 확인")
             return
         
         # 5. LSTM 코드 분석
         print("\n5️⃣ LSTM 코드 분석...")
-        lstm_results = analyzer.analyze_lstm_codes()
-        if lstm_results is None:
-            print("❌ LSTM 분석 실패")
+        try:
+            lstm_results = analyzer.analyze_lstm_codes()
+            if lstm_results is None:
+                print("❌ LSTM 분석 실패 - 소스코드 데이터 확인 필요")
+                return
+            successful_steps.append("LSTM 분석")
+            print("✅ LSTM 분석 성공")
+        except Exception as e:
+            print(f"❌ LSTM 분석 중 오류: {e}")
             return
         
         # 6. LSTM 결과 통합
         print("\n6️⃣ LSTM 결과 통합...")
-        if not analyzer.integrate_lstm_results():
-            print("❌ 결과 통합 실패")
+        try:
+            if not analyzer.integrate_lstm_results():
+                print("❌ 결과 통합 실패")
+                return
+            successful_steps.append("LSTM 결과 통합")
+            print("✅ LSTM 결과 통합 성공")
+        except Exception as e:
+            print(f"❌ LSTM 결과 통합 중 오류: {e}")
             return
         
         # 7. XGBoost 모델 로드
         print("\n7️⃣ XGBoost 모델 로드...")
-        if not analyzer.load_xgboost_model():
-            print("❌ XGBoost 모델 로드 실패")
+        try:
+            if not analyzer.load_xgboost_model():
+                print("❌ XGBoost 모델 로드 실패")
+                return
+            successful_steps.append("XGBoost 모델 로드")
+            print("✅ XGBoost 모델 로드 성공")
+        except Exception as e:
+            print(f"❌ XGBoost 모델 로드 중 오류: {e}")
             return
         
         # 8. 최종 악성 예측
         print("\n8️⃣ 최종 악성 패키지 예측...")
-        if not analyzer.predict_malicious():
-            print("❌ 예측 실패")
+        try:
+            if not analyzer.predict_malicious():
+                print("❌ 예측 실패")
+                return
+            successful_steps.append("악성 예측")
+            print("✅ 악성 예측 성공")
+        except Exception as e:
+            print(f"❌ 예측 중 오류: {e}")
             return
         
         # 9. 최종 리포트 생성
         print("\n9️⃣ 최종 리포트 생성...")
-        if not analyzer.generate_final_report():
-            print("❌ 리포트 생성 실패")
+        try:
+            if not analyzer.generate_final_report():
+                print("❌ 리포트 생성 실패")
+                return
+            successful_steps.append("리포트 생성")
+            print("✅ 리포트 생성 성공")
+        except Exception as e:
+            print(f"❌ 리포트 생성 중 오류: {e}")
             return
         
         # 10. 통합 CSV 파일 생성
         print("\n🔟 통합 분석 결과 CSV 생성...")
-        comprehensive_csv = analyzer.save_comprehensive_results()
-        if not comprehensive_csv:
-            print("❌ 통합 CSV 생성 실패")
+        try:
+            comprehensive_csv = analyzer.save_comprehensive_results()
+            if not comprehensive_csv:
+                print("❌ 통합 CSV 생성 실패")
+                return
+            successful_steps.append("통합 CSV 생성")
+            print("✅ 통합 CSV 생성 성공")
+        except Exception as e:
+            print(f"❌ 통합 CSV 생성 중 오류: {e}")
             return
         
-        print("\n✅ 모든 분석이 완료되었습니다!")
-        print("\n생성된 파일들 (./result 폴더):")
-        print("- result/merged_sourceCode.csv: 병합된 소스코드")
-        print("- result/pypi_typo_analysis5.csv: 통합 분석 데이터")
-        print("- result/package_vulnerability_analysis.csv: LSTM 분석 결과")
-        print("- result/comprehensive_analysis_results.csv: 모든 결과 통합 CSV")
-        print("- result/pypi_malicious_reason_report.txt: 최종 판단 리포트")
+        print("\n" + "="*60)
+        print("🎉 모든 분석이 완료되었습니다!")
+        print("="*60)
+        print(f"\n✅ 성공한 단계들: {', '.join(successful_steps)}")
+        print("\n📁 생성된 파일들 (./result 폴더):")
+        print("   ├── merged_sourceCode.csv: 병합된 소스코드")
+        print("   ├── pypi_typo_analysis5.csv: 통합 분석 데이터")
+        print("   ├── package_vulnerability_analysis.csv: LSTM 분석 결과")
+        print("   ├── comprehensive_analysis_results.csv: 모든 결과 통합 CSV")
+        print("   └── pypi_malicious_reason_report.txt: 최종 판단 리포트")
+        print("="*60)
         
     except KeyboardInterrupt:
-        print("\n❌ 사용자에 의해 중단되었습니다.")
+        print(f"\n❌ 사용자에 의해 중단되었습니다.")
+        if successful_steps:
+            print(f"✅ 중단 전까지 완료된 단계: {', '.join(successful_steps)}")
     except Exception as e:
         print(f"\n❌ 예기치 못한 오류가 발생했습니다: {e}")
+        if successful_steps:
+            print(f"✅ 오류 발생 전까지 완료된 단계: {', '.join(successful_steps)}")
+        print("\n🔍 상세 오류 정보:")
         import traceback
         traceback.print_exc()
     finally:
-        # 11. 메모리 정리
-        print("\n🔧 메모리 정리...")
-        analyzer.cleanup()
+        # 최종 메모리 정리
+        print("\n🔧 시스템 정리 중...")
+        try:
+            analyzer.cleanup()
+            print("✅ 메모리 정리 완료")
+        except Exception as cleanup_error:
+            print(f"⚠️ 정리 중 경고: {cleanup_error}")
+        print("👋 프로그램을 종료합니다.")
 
 if __name__ == "__main__":
     main()
