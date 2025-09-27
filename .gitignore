@@ -100,6 +100,7 @@ unified/plated-mantis-471407-m4-b14f1b3e761d.json
 codebert_test2/source/**
 safepy_3/source/**
 safepy_3_malicious/source/**
+safepy_3_malicious_ML/source/**
 codebert_mal/source/**
 
 # Analysis results and logs (분석 결과 및 로그 파일)

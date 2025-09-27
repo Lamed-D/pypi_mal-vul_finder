@@ -1,43 +1,14 @@
-# Python package security analysis tool dependencies
-# Python version: 3.10+ recommended
-# Windows compatibility verified versions
+# Python version requirement
+python>=3.8,<3.12
 
-# Core data processing - stable versions
+# Core ML libraries for LSTM malicious code detection (safepy_3_malicious)
+tensorflow==2.16.1
+scikit-learn==1.3.2
 pandas==2.0.3
 numpy==1.26.4
-
-# Machine learning and deep learning - Windows verified stable versions
-tensorflow==2.15.0
-tensorflow-intel==2.15.0
-keras==2.15.0
-scikit-learn==1.3.2
-xgboost==3.0.5
 gensim==4.3.3
 
-# Text processing and similarity
-python-Levenshtein==0.27.1
-Levenshtein==0.27.1
-chardet==5.2.0
-
-# Google Cloud services - compatibility verified versions
-google-cloud-bigquery==3.36.0
-google-auth==2.40.3
-google-auth-oauthlib==1.2.2
-google-cloud-core==2.4.3
-
-# HTTP requests and networking
-requests==2.32.4
-
-# Additional utilities
-typing-extensions==4.14.1
-
-# TensorFlow dependencies - prevent version conflicts
-protobuf>=4.25.0,<5.0.0
-grpcio>=1.33.2,<2.0.0
-ml-dtypes==0.2.0
-wrapt>=1.11.0,<1.15
-
-# Optional dependencies for development and visualization
-matplotlib>=3.5.0
-seaborn>=0.11.0
-jupyter>=1.0.0
+# Optional: Visualization (개발/분석용)
+# matplotlib>=3.5.0
+# seaborn>=0.11.0
+# jupyter>=1.0.0
