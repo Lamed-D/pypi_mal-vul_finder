@@ -191,7 +191,7 @@ class IntegratedLSTMAnalyzer:
                 "is_vulnerable": is_vulnerable,
                 "vulnerability_probability": float(prediction_final[0][0]),
                 "vulnerability_status": "Vulnerable" if is_vulnerable else "Benign",
-                "vulnerability_label": predicted_vulnerability_status,
+                "vulnerability_label": "Vulnerable" if predicted_vulnerability_status == 1 else "Benign",
                 "cwe_label": cwe_label
             }
             

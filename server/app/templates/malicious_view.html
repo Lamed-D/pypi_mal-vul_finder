@@ -209,7 +209,7 @@
                                             <div class="mb-2">
                                                 <small class="text-muted">
                                                     <strong>파일 경로:</strong><br>
-                                                    <code class="small">{{ file.file_path }}</code>
+                                                    <code class="small">{{ file.file_path.replace('\\', '/') }}</code>
                                                 </small>
                                             </div>
 
@@ -295,13 +295,14 @@
                 // 모달 제목 설정
                 document.getElementById('modalFileName').textContent = fileName;
                 
-                // 파일 경로 정리 (특수 문자 제거)
-                const cleanFilePath = filePath.replace(/[\r\n\t]/g, '').trim();
+                // 파일 경로 정리 (특수 문자 제거 및 백슬래시를 슬래시로 변환)
+                const cleanFilePath = filePath.replace(/[\r\n\t]/g, '').replace(/\\/g, '/').trim();
                 console.log('Original file path:', filePath);
                 console.log('Clean file path:', cleanFilePath);
                 
-                // 소스코드 로드
-                const response = await fetch(`/api/v1/source/${encodeURIComponent(cleanFilePath)}`);
+                // 소스코드 로드 (세션 ID 기반)
+                const sessionId = '{{ session.session_id }}';
+                const response = await fetch(`/api/v1/source/${sessionId}/${encodeURIComponent(cleanFilePath)}`);
                 if (response.ok) {
                     const sourceCode = await response.text();
                     // PlainTextResponse로 순수 텍스트가 반환되므로 추가 처리 불필요

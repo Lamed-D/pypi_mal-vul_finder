@@ -112,7 +112,7 @@ ZIP 압축 해제 → Python 파일 추출 → 파일 내용 읽기 → 메모�
 - `POST /api/v1/upload` - 파일 업로드
 - `GET /api/v1/sessions` - 세션 목록
 - `GET /api/v1/sessions/{session_id}` - 세션 정보
-- `GET /api/v1/source/{file_path}` - 소스코드 조회
+- `GET /api/v1/source/{session_id}/{file_path}` - 세션 기반 소스코드 조회
 - `GET /api/v1/stats` - 분석 통계
 
 ## 🗄️ 데이터베이스 스키마

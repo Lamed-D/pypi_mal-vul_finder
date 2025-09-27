@@ -391,43 +391,42 @@ async def get_multiprocess_status():
         "status": "running" if integrated_analyzer.get_active_tasks_count() > 0 else "idle"
     }
 
-@app.get("/api/v1/source/{file_path:path}")
-async def get_source_code(file_path: str):
-    """Get source code for a specific file"""
+@app.get("/api/v1/source/{session_id}/{file_path:path}")
+async def get_source_code(session_id: str, file_path: str):
+    """
+    세션 ID 기반 소스코드 조회
+    
+    Args:
+        session_id (str): 분석 세션 ID
+        file_path (str): 파일 경로
+        
+    Returns:
+        PlainTextResponse: 소스코드 내용
+    """
     try:
-        print(f"🔍 Requesting source code for: {file_path}")
+        print(f"🔍 Requesting source code for session: {session_id}, file: {file_path}")
+        print(f"🔍 UPLOAD_DIR: {UPLOAD_DIR}")
         
-        # 파일 경로 파싱
-        path_parts = file_path.split('/')
+        # 파일 경로 정규화 (백슬래시를 슬래시로 변환)
+        normalized_file_path = file_path.replace('\\', '/')
+        print(f"🔍 Normalized file path: {normalized_file_path}")
         
-        # 세션 ID와 파일 경로 추출
-        if len(path_parts) >= 2:
-            # session_id/filename 형식
-            session_id = path_parts[0]
-            original_path = '/'.join(path_parts[1:])
-        else:
-            # 파일명만 있는 경우, 모든 세션에서 검색
-            session_id = None
-            original_path = file_path
+        # 세션 디렉토리 확인
+        upload_dir = UPLOAD_DIR / session_id
+        print(f"🔍 Looking for session directory: {upload_dir}")
+        print(f"🔍 Directory exists: {upload_dir.exists()}")
         
-        print(f"🔍 Session ID: {session_id}, File path: {original_path}")
+        if not upload_dir.exists():
+            print(f"❌ Session directory not found: {upload_dir}")
+            # 사용 가능한 세션 디렉토리 목록 출력
+            available_sessions = [d.name for d in UPLOAD_DIR.iterdir() if d.is_dir()]
+            print(f"🔍 Available sessions: {available_sessions}")
+            raise HTTPException(status_code=404, detail="Session not found")
         
-        # 세션 ID가 있는 경우 해당 세션에서만 검색
-        if session_id:
-            upload_dir = UPLOAD_DIR / session_id
-            if not upload_dir.exists():
-                print(f"❌ Session directory not found: {upload_dir}")
-                raise HTTPException(status_code=404, detail="Session not found")
-            
-            search_dirs = [upload_dir / "extracted"]
-        else:
-            # 모든 세션에서 검색
-            search_dirs = []
-            for session_dir in UPLOAD_DIR.iterdir():
-                if session_dir.is_dir():
-                    extract_dir = session_dir / "extracted"
-                    if extract_dir.exists():
-                        search_dirs.append(extract_dir)
+        # extracted 디렉토리에서 검색
+        search_dirs = [upload_dir / "extracted"]
+        print(f"🔍 Search directory: {search_dirs[0]}")
+        print(f"🔍 Search directory exists: {search_dirs[0].exists()}")
         
         file_full_path = None
         
@@ -435,46 +434,29 @@ async def get_source_code(file_path: str):
         for extract_dir in search_dirs:
             print(f"🔍 Searching in: {extract_dir}")
             
-            # 파일명 정규화 (sourcepip__ -> __)
-            normalized_filename = path_parts[-1]
-            if normalized_filename.startswith("sourcepip__"):
-                # sourcepip_internallocations_distutils.py -> _distutils.py
-                if "internallocations" in normalized_filename:
-                    normalized_filename = normalized_filename.replace("sourcepip_internallocations_", "_")
-                else:
-                    normalized_filename = normalized_filename.replace("sourcepip__", "__")
-            elif normalized_filename.startswith("sourceuv__"):
-                normalized_filename = normalized_filename.replace("sourceuv__", "__")
+            # 파일 경로 파싱
+            path_parts = normalized_file_path.split('/')
+            filename = path_parts[-1]
             
-            print(f"🔍 Original filename: {path_parts[-1]}")
-            print(f"🔍 Normalized filename: {normalized_filename}")
+            print(f"🔍 Original filename: {filename}")
+            print(f"🔍 Normalized file path: {normalized_file_path}")
             
             # 여러 가능한 경로 시도
             possible_paths = [
-                extract_dir / original_path,
-                extract_dir / path_parts[-1],  # 원본 파일명
-                extract_dir / normalized_filename,  # 정규화된 파일명
+                extract_dir / normalized_file_path, # 정규화된 전체 경로
+                extract_dir / file_path,            # 원본 전체 경로
+                extract_dir / filename,             # 파일명만
             ]
             
             # 파일명으로 검색 (원본)
-            matching_files = list(extract_dir.rglob(f"*{path_parts[-1]}"))
+            matching_files = list(extract_dir.rglob(f"*{filename}"))
             if matching_files:
                 possible_paths.extend(matching_files)
             
-            # 정규화된 파일명으로 검색
-            matching_files_normalized = list(extract_dir.rglob(f"*{normalized_filename}"))
-            if matching_files_normalized:
-                possible_paths.extend(matching_files_normalized)
-            
             # 정확한 파일명으로도 검색
-            exact_files = list(extract_dir.rglob(path_parts[-1]))
+            exact_files = list(extract_dir.rglob(filename))
             if exact_files:
                 possible_paths.extend(exact_files)
-            
-            # 정규화된 정확한 파일명으로 검색
-            exact_files_normalized = list(extract_dir.rglob(normalized_filename))
-            if exact_files_normalized:
-                possible_paths.extend(exact_files_normalized)
             
             # 중복 제거
             possible_paths = list(set(possible_paths))
