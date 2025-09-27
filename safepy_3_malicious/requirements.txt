@@ -3,6 +3,7 @@ python>=3.8,<3.12
 
 # Core ML libraries for LSTM malicious code detection (safepy_3_malicious)
 tensorflow==2.16.1
+keras==3.10.0
 scikit-learn==1.3.2
 pandas==2.0.3
 numpy==1.26.4

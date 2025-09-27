@@ -83,6 +83,14 @@ async def startup_event():
     print("Database initialized")
     print("Services ready")
 
+@app.on_event("shutdown")
+async def shutdown_event():
+    """Cleanup on shutdown"""
+    print("Shutting down Python Security Analysis System...")
+    if integrated_analyzer:
+        integrated_analyzer.shutdown_executor()
+    print("Shutdown complete")
+
 # =============================================================================
 # 웹 페이지 라우트
 # =============================================================================
@@ -267,6 +275,7 @@ async def analyze_file_integrated_async(session_id: str, file_path: str, filenam
             print(f"📊 Results: {save_result['vulnerability_results']} vulnerable, {save_result['malicious_results']} malicious, {save_result['safe_files']} safe")
             print(f"⏱️ Total analysis time: {save_result['total_analysis_time']:.2f} seconds")
             print(f"💾 Results saved to: LSTM_VUL, LSTM_MAL, main_log tables")
+            print(f"🔄 Server continues running for next analysis...")
             
         else:
             print(f"❌ Integrated analysis failed for session {session_id}: {analysis_result.get('error', 'Unknown error')}")
@@ -275,6 +284,7 @@ async def analyze_file_integrated_async(session_id: str, file_path: str, filenam
         print(f"❌ Integrated analysis failed for session {session_id}: {e}")
         import traceback
         traceback.print_exc()
+        print(f"🔄 Server continues running despite analysis error...")
 
 
 @app.get("/session/{session_id}")
@@ -524,6 +534,16 @@ async def test_endpoint():
             "error": str(e),
             "message": "Server has issues"
         }
+
+@app.get("/health")
+async def health_check():
+    """Health check endpoint to keep server alive"""
+    return {
+        "status": "healthy",
+        "timestamp": datetime.now().isoformat(),
+        "active_tasks": integrated_analyzer.get_active_tasks_count(),
+        "message": "Server is running and ready for analysis"
+    }
 
 if __name__ == "__main__":
     import uvicorn

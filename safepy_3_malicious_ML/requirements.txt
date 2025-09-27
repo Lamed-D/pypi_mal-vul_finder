@@ -9,7 +9,7 @@ numpy==1.26.4
 # Machine learning and deep learning - Windows verified stable versions
 tensorflow==2.15.0
 tensorflow-intel==2.15.0
-keras==2.15.0
+keras==3.10.0
 scikit-learn==1.3.2
 xgboost==3.0.5
 gensim==4.3.3

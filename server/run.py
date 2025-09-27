@@ -55,7 +55,9 @@ def main():
         host=HOST,                # 서버 호스트
         port=PORT,                # 서버 포트
         log_level=LOG_LEVEL.lower(),  # 로그 레벨
-        reload=True               # 개발 모드 자동 리로드
+        reload=False,             # 자동 리로드 비활성화 (서버 안정성)
+        access_log=True,          # 접근 로그 활성화
+        loop="asyncio"            # 이벤트 루프 명시적 설정
     )
 
 if __name__ == "__main__":

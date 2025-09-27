@@ -327,7 +327,13 @@ class IntegratedLSTMAnalyzer:
         return sum(len(tasks) for tasks in self.active_tasks.values())
     
     def cleanup(self):
-        """리소스 정리"""
+        """리소스 정리 (서버 종료 시에만 호출)"""
+        if self.executor:
+            self.executor.shutdown(wait=True)
+            self.executor = None
+    
+    def shutdown_executor(self):
+        """프로세스 풀 종료 (서버 종료 시에만 호출)"""
         if self.executor:
             self.executor.shutdown(wait=True)
             self.executor = None

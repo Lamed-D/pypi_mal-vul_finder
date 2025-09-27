@@ -5,3 +5,4 @@ python>=3.8,<3.11
 torch==2.1.2
 transformers==4.40.2
 numpy==1.26.4
+keras==3.10.0
