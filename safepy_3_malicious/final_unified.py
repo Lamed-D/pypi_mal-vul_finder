@@ -275,10 +275,13 @@ class FinalUnifiedAnalyzer:
 
     def download_unified(self, package_name):
         """통합된 다운로드 수 조회"""
+        """
         download_count = self.get_pepy_downloads(package_name, "0SRbc/jRFsHYxOShwIQ/N0jtrKf1syMW")
         if download_count == -1:
-            download_count = self.get_download_count_bq(package_name, "./plated-mantis-471407-m4-b14f1b3e761d.json")
+            download_count = self.get_download_count_bq(package_name, "./plated-mantis-471407-m4-b14f1b3e761d.json")    
         return download_count
+        """
+        return 0
 
     def shannon_entropy(self, s):
         """문자열의 Shannon 엔트로피 계산"""
@@ -965,3 +968,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+
