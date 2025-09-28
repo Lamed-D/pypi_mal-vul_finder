@@ -4,7 +4,7 @@ CodeBERT 기반 취약점/악성 분석 스크립트(실험용)
 절차 개요:
 1) source 폴더의 ZIP 추출 → 파이썬 파일(.py) 수집
 2) 모델/토크나이저 로드
-3) 슬라이딩 윈도우 청크로 추론 → 파일 레벨 확률 집계
+3) 슬라이딩 윈도우 청크로 추론 → 청크별 확률을 중앙 가중치 기반 가중평균과 청크별 최댓값을 결합해 파일 수준 확률로 집계
 4) CSV 저장(대시보드 최소 필드), 콘솔 요약 출력
 
 본 파일은 실험/배치용으로, 서버 배포는 `server/analysis/lstm_analyzer.py`를 사용합니다.
@@ -34,8 +34,8 @@ LOG_DIR          = os.path.join(CURRENT_DIR, "logs")
 
 MAX_LEN   = 512
 STRIDE    = 128
-BATCH_SZ  = 8  # GPU 메모리 허용 시 배치 크기 증가로 속도 향상
-THRESHOLD = 0.50
+BATCH_SZ  = 8 # GPU 메모리 허용 시 배치 크기 증가로 속도 향상
+THRESHOLD = 0.55
 DEVICE    = "cuda" if torch.cuda.is_available() else "cpu"
 
 # =========================
@@ -148,30 +148,10 @@ def load_unified_model(model_dir: str, device: str):
     
     return tok, mdl
 
-# =========================
-# 보조: 안전(정상) 클래스 자동 추정
-# =========================
-SAFE_LABEL_HINTS = ["notvuln", "no_vuln", "no-vuln", "benign", "clean", "safe", "normal", "none"]
-SAFE_CLASS_INDEX_OVERRIDE: Optional[int] = None  # 알면 여기 숫자(인덱스)로 지정
-
-def find_safe_index(model) -> Optional[int]:
-    """Infer the index of a 'safe/benign' class from model config labels."""
-    if SAFE_CLASS_INDEX_OVERRIDE is not None:
-        return SAFE_CLASS_INDEX_OVERRIDE
-    id2label = getattr(model.config, "id2label", None)
-    if not id2label:
-        return None
-    for k, v in id2label.items():
-        name = str(v).lower().replace(" ", "").replace("-", "_")
-        if any(h in name for h in SAFE_LABEL_HINTS):
-            try:
-                return int(k)
-            except Exception:
-                continue
-    return None
+CLEAN_IDX = 7 # 정상 클래스 인덱스
 
 # =========================
-# 토크나이즈 + 슬라이딩 청크 생성 
+# 토크나이즈 + 슬라이딩 청크 생성
 # =========================
 def chunk_with_overflow(tokenizer, text: str, max_len=512, stride=128):
     """긴 입력을 슬라이딩 윈도우로 커버하도록 토크나이즈.
@@ -192,40 +172,24 @@ def chunk_with_overflow(tokenizer, text: str, max_len=512, stride=128):
 
 # =========================
 # 단일 모델 추론: 취약도 + CWE Top-K
-# - single_label(softmax)과 multi_label(sigmoid) 자동 대응
+# - 다중 클래스 분류
 # =========================
 @torch.no_grad()
 def predict_unified(device, tokenizer, model, text: str,
                     max_len: int, stride: int, batch_sz: int, topk: int = 3):
-    """청크 단위 추론 후 파일 레벨 메트릭 계산.
-
-    Args:
-    	device: 실행 디바이스
-    	tokenizer, model: HF 구성 요소
-    	text: 입력 소스코드
-    	max_len, stride, batch_sz: 토크나이즈/배치 파라미터
-    	topk: 상위 K개의 CWE 반환 개수
-
-    Returns:
-    	(vuln_prob, vulnerable_flag, top1_cwe, top1_prob, topk_list)
-    """
     enc = chunk_with_overflow(tokenizer, text, max_len, stride)
     if enc["input_ids"].shape[0] == 0:
         return 0.0, 0, None, None, None  # (vuln_prob, vulnerable, top1_name, top1_prob, topk_named)
 
     # 배치 추론
     probs_all = []
-    is_multilabel = (getattr(model.config, "problem_type", None) == "multi_label_classification")
 
     id2label = getattr(model.config, "id2label", None)
     # 있으면 cwe_labels.txt를 최우선으로 사용
     cwe_label_names = load_labels(CWE_LABELS_PATH)
     # transformers가 config.json을 로드할 때 id2label 키를 int로 캐스팅하기도 함
     if isinstance(id2label, dict):
-        try:
-            id2label = {int(k): v for k, v in id2label.items()}
-        except Exception:
-            pass
+        id2label = {int(k): v for k, v in id2label.items()}
     def idx_to_name(i: int) -> str:
         if cwe_label_names and 0 <= i < len(cwe_label_names):
             return cwe_label_names[i]
@@ -238,51 +202,52 @@ def predict_unified(device, tokenizer, model, text: str,
         mask = enc["attention_mask"][i:i+batch_sz].to(device)
         logits = model(input_ids=ids, attention_mask=mask).logits  # (B, C) or (B,1)
 
-        if is_multilabel:
-            p = torch.sigmoid(logits)                    # (B, C)
+        if logits.shape[-1] == 1:
+            # 특이 케이스: 진짜 1차원 이진일 때
+            p = torch.sigmoid(logits)                # (B,1)
         else:
-            if logits.shape[-1] == 1:
-                # 특이 케이스: 진짜 1차원 이진일 때
-                p = torch.sigmoid(logits)                # (B,1)
-            else:
-                p = torch.softmax(logits, dim=-1)        # (B, C)
+            p = torch.softmax(logits, dim=-1)        # (B, C)
         probs_all.append(p.cpu().numpy())
 
     probs = np.concatenate(probs_all, axis=0)  # (num_chunks, 1 or C)
     C = probs.shape[1]
 
-    # ===== 이진 모델(출력 1)일 때: 청크 확률의 최대값을 취약도 =====
-    if C == 1:
-        vuln_prob = float(probs.max())
-        vulnerable = int(vuln_prob >= THRESHOLD)
-        return vuln_prob, vulnerable, None, None, None
-
-    # ===== 다중(라벨 수 >=2)일 때 =====
-    # 청크 평균(파일 레벨 확률)
-    mean_probs = probs.mean(axis=0)  # (C,)
+    # ===== 다중 클래스 분류 =====
+    # 개선된 청크 분석: 가중 평균 + 최대값 고려
+    num_chunks = probs.shape[0]
+    
+    # 방법 1: 가중 평균 (중앙 청크에 더 높은 가중치)
+    if num_chunks > 1:
+        weights = np.exp(-0.1 * np.abs(np.arange(num_chunks) - num_chunks/2))
+        weights = weights / weights.sum()
+        weighted_probs = np.average(probs, axis=0, weights=weights)
+    else:
+        weighted_probs = probs[0]
+    
+    # 방법 2: 최대값과 평균의 조합 (60% 가중평균 + 40% 최대값)
+    max_probs = probs.max(axis=0)
+    combined_probs = 0.6 * weighted_probs + 0.4 * max_probs
 
     # 안전(정상) 클래스가 있다면: vuln_prob = 1 - P(safe)
-    safe_idx = find_safe_index(model)
-    if (not is_multilabel) and (safe_idx is not None) and 0 <= safe_idx < C:
-        vuln_prob = float(1.0 - mean_probs[safe_idx])
+    safe_idx = CLEAN_IDX if 0 <= CLEAN_IDX < C else None
+    if (safe_idx is not None) and 0 <= safe_idx < C:
+        vuln_prob = float(1.0 - combined_probs[safe_idx])
         vulnerable = int(vuln_prob >= THRESHOLD)
     else:
-        # 안전 클래스가 없거나 멀티라벨이면:
-        # - 멀티라벨: 취약도 = max(mean_probs) (여러 CWE 동시 가능)
-        # - 단일라벨(안전 미탐지): 취약도 = Top-1 확률
-        vuln_prob = float(mean_probs.max())
+        # 안전 클래스가 없으면: 취약도 = Top-1 확률
+        vuln_prob = float(combined_probs.max())
         vulnerable = int(vuln_prob >= THRESHOLD)
 
-    # Top-k CWE
-    top_idx = mean_probs.argsort()[::-1][:topk]
-    top_named = [(idx_to_name(int(i)), float(mean_probs[i])) for i in top_idx]
+    # Top-k CWE (개선된 확률 사용)
+    top_idx = combined_probs.argsort()[::-1][:topk]
+    top_named = [(idx_to_name(int(i)), float(combined_probs[i])) for i in top_idx]
 
     # Top-1이 안전 클래스라면 2등을 CWE로 표시
     cwe_top1_name, cwe_top1_prob = None, None
     if safe_idx is not None and int(top_idx[0]) == int(safe_idx) and len(top_idx) > 1:
-        cwe_top1_name, cwe_top1_prob = idx_to_name(int(top_idx[1])), float(mean_probs[top_idx[1]])
+        cwe_top1_name, cwe_top1_prob = idx_to_name(int(top_idx[1])), float(combined_probs[top_idx[1]])
     else:
-        cwe_top1_name, cwe_top1_prob = idx_to_name(int(top_idx[0])), float(mean_probs[top_idx[0]])
+        cwe_top1_name, cwe_top1_prob = idx_to_name(int(top_idx[0])), float(combined_probs[top_idx[0]])
 
     return vuln_prob, vulnerable, cwe_top1_name, cwe_top1_prob, top_named
 
@@ -316,7 +281,7 @@ class FileResult:
 # 파일 하나 분석
 # =========================
 def analyze_python_code(path: str, device: str, tok, mdl,
-                        max_len=512, stride=128, batch_sz=8, threshold=0.5) -> FileResult:
+                        max_len=512, stride=128, batch_sz=8, threshold=THRESHOLD) -> FileResult:
     """단일 파이썬 파일을 분석하여 구조화된 결과를 반환."""
     start_time = time.time()
     
@@ -329,9 +294,6 @@ def analyze_python_code(path: str, device: str, tok, mdl,
     vuln_prob, vulnerable, cwe_name, cwe_prob, topk_named = predict_unified(
         device, tok, mdl, code, max_len, stride, batch_sz, topk=3
     )
-
-    # 최종 임계값 적용(필요시 덮어쓰기)
-    vulnerable = int(vuln_prob >= threshold)
     
     analysis_time = time.time() - start_time
 
