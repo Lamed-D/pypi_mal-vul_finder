@@ -21,6 +21,10 @@
             background-color: #fff3cd;
             cursor: pointer;
         }
+        .file-card.safe {
+            border-left: 4px solid #28a745;
+            background-color: #d4edda;
+        }
         .file-card:hover {
             transform: translateY(-2px);
             box-shadow: 0 4px 8px rgba(0,0,0,0.1);
@@ -236,6 +240,30 @@
                                                 <small class="text-muted">
                                                     <i class="fas fa-mouse-pointer me-1"></i>클릭하여 소스코드 보기
                                                 </small>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                                {% endfor %}
+                            </div>
+                        {% endif %}
+                        {% if vulnerable_safe_files %}
+                            <hr>
+                            <h6 class="mb-3"><i class="fas fa-shield-alt me-1 text-success"></i>안전한 파일 (취약 관점)</h6>
+                            <div class="row">
+                                {% for file in vulnerable_safe_files %}
+                                <div class="col-md-6 mb-3">
+                                    <div class="card file-card safe">
+                                        <div class="card-body">
+                                            <div class="d-flex justify-content-between align-items-start mb-2">
+                                                <h6 class="card-title mb-0">
+                                                    <i class="fas fa-file-code me-1"></i>{{ file.file_name }}
+                                                </h6>
+                                                <span class="badge bg-success">Safe</span>
+                                            </div>
+                                            <small class="text-muted">CWE: {{ file.cwe_label }}</small>
+                                            <div class="mt-2">
+                                                <small class="text-muted">신뢰도: {{ "%.1f"|format(file.vulnerability_probability * 100) }}%</small>
                                             </div>
                                         </div>
                                     </div>

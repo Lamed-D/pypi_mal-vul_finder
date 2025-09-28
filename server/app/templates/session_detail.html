@@ -154,12 +154,16 @@
                         <span class="badge bg-{{ 'success' if session.is_safe else 'danger' }} status-badge">
                             {{ 'Safe' if session.is_safe else 'Unsafe' }}
                         </span>
-                        <a href="/session/{{ session.session_id }}/malicious" class="btn btn-light">
+                        {% if session.mal_flag %}
+                        <a href="/session/{{ session.session_id }}/malicious" class="btn btn-danger">
                             <i class="fas fa-skull-crossbones me-1"></i>악성 코드
                         </a>
+                        {% endif %}
+                        {% if session.vul_flag %}
                         <a href="/session/{{ session.session_id }}/vulnerable" class="btn btn-warning">
                             <i class="fas fa-exclamation-triangle me-1"></i>취약점
                         </a>
+                        {% endif %}
                     </div>
                 </div>
             </div>
@@ -193,9 +197,16 @@
                         </div>
                         <div class="row mt-3">
                             <div class="col-12 text-center">
-                                <a href="/session/{{ session.session_id }}" class="btn btn-primary">
-                                    <i class="fas fa-list me-1"></i>전체보기 리포트
+                                {% if session.mal_flag %}
+                                <a href="/session/{{ session.session_id }}/malicious" class="btn btn-danger me-2">
+                                    <i class="fas fa-skull-crossbones me-1"></i>악성 코드만 보기
                                 </a>
+                                {% endif %}
+                                {% if session.vul_flag %}
+                                <a href="/session/{{ session.session_id }}/vulnerable" class="btn btn-warning">
+                                    <i class="fas fa-exclamation-triangle me-1"></i>취약 코드만 보기
+                                </a>
+                                {% endif %}
                             </div>
                         </div>
                     </div>
@@ -236,7 +247,7 @@
         </div>
 
         <!-- 취약점 분석 결과 -->
-        {% if session.vulnerability_results %}
+        {% if session.vulnerability_results or session.vulnerability_safe_results %}
         <div class="row mb-4">
             <div class="col-12">
                 <div class="card">
@@ -244,7 +255,7 @@
                         <h5 class="mb-0">
                             <i class="fas fa-bug me-2"></i>취약점 분석 결과 (LSTM_VUL)
                         </h5>
-                        <span class="badge warning-badge">{{ session.vulnerability_results|length }}개 파일</span>
+                        <span class="badge warning-badge">취약 {{ session.vulnerability_results|length }} / 안전 {{ session.vulnerability_safe_results|length }}</span>
                     </div>
                     <div class="card-body">
                         <div class="row">
@@ -285,6 +296,30 @@
                             </div>
                             {% endfor %}
                         </div>
+                        {% if session.vulnerability_safe_results %}
+                        <hr>
+                        <h6 class="mb-3"><i class="fas fa-shield-alt me-1 text-success"></i>안전한 파일 (취약 관점)</h6>
+                        <div class="row">
+                            {% for file in session.vulnerability_safe_results %}
+                            <div class="col-md-6 mb-3">
+                                <div class="card file-card safe">
+                                    <div class="card-body">
+                                        <div class="d-flex justify-content-between align-items-start mb-2">
+                                            <h6 class="card-title mb-0">
+                                                <i class="fas fa-file-code me-1"></i>{{ file.file_name }}
+                                            </h6>
+                                            <span class="badge bg-success">Safe</span>
+                                        </div>
+                                        <small class="text-muted">CWE: {{ file.cwe_label }}</small>
+                                        <div class="mt-2">
+                                            <small class="text-muted">신뢰도: {{ "%.1f"|format(file.vulnerability_probability * 100) }}%</small>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                            {% endfor %}
+                        </div>
+                        {% endif %}
                     </div>
                 </div>
             </div>
@@ -292,7 +327,7 @@
         {% endif %}
 
         <!-- 악성 코드 분석 결과 -->
-        {% if session.malicious_results %}
+        {% if session.malicious_results or session.malicious_safe_results %}
         <div class="row mb-4">
             <div class="col-12">
                 <div class="card">
@@ -300,7 +335,7 @@
                         <h5 class="mb-0">
                             <i class="fas fa-bug me-2"></i>악성 코드 분석 결과 (LSTM_MAL)
                         </h5>
-                        <span class="badge danger-badge">{{ session.malicious_results|length }}개 파일</span>
+                        <span class="badge danger-badge">악성 {{ session.malicious_results|length }} / 안전 {{ session.malicious_safe_results|length }}</span>
                     </div>
                     <div class="card-body">
                         <div class="row">
@@ -343,6 +378,27 @@
                             </div>
                             {% endfor %}
                         </div>
+                        {% if session.malicious_safe_results %}
+                        <hr>
+                        <h6 class="mb-3"><i class="fas fa-shield-alt me-1 text-success"></i>안전한 파일 (악성 관점)</h6>
+                        <div class="row">
+                            {% for file in session.malicious_safe_results %}
+                            <div class="col-md-6 mb-3">
+                                <div class="card file-card safe">
+                                    <div class="card-body">
+                                        <div class="d-flex justify-content-between align-items-start mb-2">
+                                            <h6 class="card-title mb-0">
+                                                <i class="fas fa-file-code me-1"></i>{{ file.file_name }}
+                                            </h6>
+                                            <span class="badge bg-success">Safe</span>
+                                        </div>
+                                        <small class="text-muted">확률: {{ "%.1f"|format(file.malicious_probability * 100) }}%</small>
+                                    </div>
+                                </div>
+                            </div>
+                            {% endfor %}
+                        </div>
+                        {% endif %}
                     </div>
                 </div>
             </div>

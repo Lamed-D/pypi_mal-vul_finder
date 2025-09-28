@@ -448,7 +448,8 @@ async def get_malicious_files(session_id: str, request: Request):
         return templates.TemplateResponse("malicious_view.html", {
             "request": request,
             "session": session_summary,
-            "malicious_files": session_summary.get("malicious_results", [])
+            "malicious_files": session_summary.get("malicious_results", []),
+            "malicious_safe_files": session_summary.get("malicious_safe_results", [])
         })
         
     except HTTPException:
@@ -470,7 +471,8 @@ async def get_vulnerable_files(session_id: str, request: Request):
         return templates.TemplateResponse("vulnerable_view.html", {
             "request": request,
             "session": session_summary,
-            "vulnerable_files": session_summary.get("vulnerability_results", [])
+            "vulnerable_files": session_summary.get("vulnerability_results", []),
+            "vulnerable_safe_files": session_summary.get("vulnerability_safe_results", [])
         })
         
     except HTTPException:

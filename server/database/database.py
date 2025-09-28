@@ -69,6 +69,37 @@ class LSTM_MAL(Base):
     upload_time = Column(DateTime, default=datetime.utcnow)
     created_at = Column(DateTime, default=datetime.utcnow)
 
+class LSTM_VUL_SAFE(Base):
+    """안전한 파일 (취약점 분석 관점) 기록 테이블"""
+    __tablename__ = "lstm_vul_safe"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    session_id = Column(String, index=True)
+    file_path = Column(String)
+    file_name = Column(String)
+    file_size = Column(Integer)
+    vulnerability_status = Column(String)  # 항상 "Safe"
+    vulnerability_probability = Column(Float)
+    cwe_label = Column(String)
+    analysis_time = Column(Float)
+    upload_time = Column(DateTime, default=datetime.utcnow)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+class LSTM_MAL_SAFE(Base):
+    """안전한 파일 (악성코드 분석 관점) 기록 테이블"""
+    __tablename__ = "lstm_mal_safe"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    session_id = Column(String, index=True)
+    file_path = Column(String)
+    file_name = Column(String)
+    file_size = Column(Integer)
+    malicious_status = Column(String)  # 항상 "Safe"
+    malicious_probability = Column(Float)
+    analysis_time = Column(Float)
+    upload_time = Column(DateTime, default=datetime.utcnow)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
 class main_log(Base):
     """안전한 파일 요약 로그 테이블"""
     __tablename__ = "main_log"
@@ -84,6 +115,8 @@ class main_log(Base):
     safe_files = Column(Integer)
     vulnerable_files = Column(Integer)
     malicious_files = Column(Integer)
+    vul_flag = Column(Boolean, default=False)
+    mal_flag = Column(Boolean, default=False)
     is_safe = Column(Boolean, default=True)
     created_at = Column(DateTime, default=datetime.utcnow)
 
@@ -94,7 +127,7 @@ def init_database():
         Base.metadata.create_all(bind=engine)
         print("✅ Integrated database initialized successfully")
         print(f"📁 Database file: {DB_PATH}")
-        print("📊 Tables created: lstm_vul, lstm_mal, main_log")
+        print("📊 Tables created: lstm_vul, lstm_mal, lstm_vul_safe, lstm_mal_safe, main_log")
     except Exception as e:
         print(f"❌ Error initializing integrated database: {e}")
 
@@ -140,6 +173,20 @@ def save_analysis_results(session_id: str, results: List[Dict[str, Any]], upload
                         upload_time=upload_info.get("upload_time", datetime.utcnow())
                     )
                     db.add(vul_record)
+                else:
+                    # 안전한 파일은 LSTM_VUL_SAFE에 기록
+                    vul_safe = LSTM_VUL_SAFE(
+                        session_id=session_id,
+                        file_path=result.get("file_path", ""),
+                        file_name=result.get("file_name", ""),
+                        file_size=result.get("file_size", 0),
+                        vulnerability_status="Safe",
+                        vulnerability_probability=vul_analysis.get("vulnerability_probability", 0.0),
+                        cwe_label=vul_analysis.get("cwe_label", "Safe"),
+                        analysis_time=result.get("analysis_time", 0.0),
+                        upload_time=upload_info.get("upload_time", datetime.utcnow())
+                    )
+                    db.add(vul_safe)
 
             if mode in ("both", "mal"):
                 # 악성 코드 분석 결과 저장 (실제 악성인 파일만)
@@ -160,6 +207,19 @@ def save_analysis_results(session_id: str, results: List[Dict[str, Any]], upload
                         upload_time=upload_info.get("upload_time", datetime.utcnow())
                     )
                     db.add(mal_record)
+                else:
+                    # 안전한 파일은 LSTM_MAL_SAFE에 기록
+                    mal_safe = LSTM_MAL_SAFE(
+                        session_id=session_id,
+                        file_path=result.get("file_path", ""),
+                        file_name=result.get("file_name", ""),
+                        file_size=result.get("file_size", 0),
+                        malicious_status="Safe",
+                        malicious_probability=mal_analysis.get("malicious_probability", 0.0),
+                        analysis_time=result.get("analysis_time", 0.0),
+                        upload_time=upload_info.get("upload_time", datetime.utcnow())
+                    )
+                    db.add(mal_safe)
 
             # 안전한 파일 카운트 (취약하지도 않고 악성도 아닌 파일)
             vul_analysis = result.get("vulnerability_analysis", {})
@@ -174,6 +234,10 @@ def save_analysis_results(session_id: str, results: List[Dict[str, Any]], upload
         total_files = len(results)
         is_safe = (vulnerability_results == 0 and malicious_results == 0)
         
+        # 세션 플래그: 분석 모드 및 실제 결과 기반
+        vul_flag_value = (mode in ("both", "vul")) and (vulnerability_results > 0)
+        mal_flag_value = (mode in ("both", "mal")) and (malicious_results > 0)
+
         log_record = main_log(
             session_id=session_id,
             upload_time=upload_info.get("upload_time", datetime.utcnow()),
@@ -185,6 +249,8 @@ def save_analysis_results(session_id: str, results: List[Dict[str, Any]], upload
             safe_files=safe_files,
             vulnerable_files=vulnerability_results,
             malicious_files=malicious_results,
+            vul_flag=vul_flag_value,
+            mal_flag=mal_flag_value,
             is_safe=is_safe
         )
         db.add(log_record)
@@ -219,9 +285,11 @@ def get_session_summary(session_id: str) -> Optional[Dict[str, Any]]:
         
         # 취약점 분석 결과 조회
         vul_records = db.query(LSTM_VUL).filter(LSTM_VUL.session_id == session_id).all()
+        vul_safe_records = db.query(LSTM_VUL_SAFE).filter(LSTM_VUL_SAFE.session_id == session_id).all()
         
         # 악성 코드 분석 결과 조회
         mal_records = db.query(LSTM_MAL).filter(LSTM_MAL.session_id == session_id).all()
+        mal_safe_records = db.query(LSTM_MAL_SAFE).filter(LSTM_MAL_SAFE.session_id == session_id).all()
         
         return {
             "session_id": session_id,
@@ -234,6 +302,8 @@ def get_session_summary(session_id: str) -> Optional[Dict[str, Any]]:
             "safe_files": int(log_record.safe_files) if log_record.safe_files else 0,
             "vulnerable_files": int(log_record.vulnerable_files) if log_record.vulnerable_files else 0,
             "malicious_files": int(log_record.malicious_files) if log_record.malicious_files else 0,
+            "vul_flag": bool(log_record.vul_flag) if log_record.vul_flag is not None else False,
+            "mal_flag": bool(log_record.mal_flag) if log_record.mal_flag is not None else False,
             "is_safe": bool(log_record.is_safe) if log_record.is_safe is not None else True,
             "vulnerability_results": [
                 {
@@ -247,6 +317,17 @@ def get_session_summary(session_id: str) -> Optional[Dict[str, Any]]:
                 }
                 for record in vul_records
             ],
+            "vulnerability_safe_results": [
+                {
+                    "file_path": str(record.file_path) if record.file_path else "",
+                    "file_name": str(record.file_name) if record.file_name else "",
+                    "vulnerability_status": str(record.vulnerability_status) if record.vulnerability_status else "Safe",
+                    "vulnerability_probability": float(record.vulnerability_probability) if record.vulnerability_probability else 0.0,
+                    "cwe_label": str(record.cwe_label) if record.cwe_label else "Safe",
+                    "analysis_time": float(record.analysis_time) if record.analysis_time else 0.0
+                }
+                for record in vul_safe_records
+            ],
             "malicious_results": [
                 {
                     "file_path": str(record.file_path) if record.file_path else "",
@@ -257,6 +338,16 @@ def get_session_summary(session_id: str) -> Optional[Dict[str, Any]]:
                     "analysis_time": float(record.analysis_time) if record.analysis_time else 0.0
                 }
                 for record in mal_records
+            ],
+            "malicious_safe_results": [
+                {
+                    "file_path": str(record.file_path) if record.file_path else "",
+                    "file_name": str(record.file_name) if record.file_name else "",
+                    "malicious_status": str(record.malicious_status) if record.malicious_status else "Safe",
+                    "malicious_probability": float(record.malicious_probability) if record.malicious_probability else 0.0,
+                    "analysis_time": float(record.analysis_time) if record.analysis_time else 0.0
+                }
+                for record in mal_safe_records
             ]
         }
         
@@ -328,6 +419,8 @@ def get_recent_sessions(limit: int = 10) -> List[Dict[str, Any]]:
                 "safe_files": session.safe_files,
                 "vulnerable_files": session.vulnerable_files,
                 "malicious_files": session.malicious_files,
+                "vul_flag": session.vul_flag,
+                "mal_flag": session.mal_flag,
                 "is_safe": session.is_safe,
                 "created_at": session.created_at
             }

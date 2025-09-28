@@ -175,12 +175,16 @@
                                         <button class="btn btn-sm btn-outline-primary" onclick="viewSession('{{ session.session_id }}')">
                                             <i class="fas fa-eye"></i> 전체
                                         </button>
+                                        {% if session.mal_flag %}
                                         <a href="/session/{{ session.session_id }}/malicious" class="btn btn-sm btn-outline-danger">
                                             <i class="fas fa-skull-crossbones"></i> 악성
                                         </a>
+                                        {% endif %}
+                                        {% if session.vul_flag %}
                                         <a href="/session/{{ session.session_id }}/vulnerable" class="btn btn-sm btn-outline-warning">
                                             <i class="fas fa-exclamation-triangle"></i> 취약
                                         </a>
+                                        {% endif %}
                                     </div>
                                 </div>
                             </div>
