@@ -121,8 +121,8 @@ except FileNotFoundError:
     print("Error: model_full.pkl not found.")
 
 try:
-    # 변환된 TensorFlow 2.15.0 호환 모델 로드
-    with open(os.path.join(model_save_dir, 'model_final_tf215.pkl'), 'rb') as f:
+    # 모델 로드
+    with open(os.path.join(model_save_dir, 'model_final.pkl'), 'rb') as f:
         model_final = pickle.load(f)
     print("model_final loaded successfully.")
 except FileNotFoundError:

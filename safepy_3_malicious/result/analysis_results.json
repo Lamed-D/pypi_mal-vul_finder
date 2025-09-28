@@ -369,7 +369,7 @@
     "file_path":"source\\python-packages-1757595213589\\source\\pip\\_internal\\metadata\\importlib\\_compat.py",
     "file_name":"_compat.py",
     "malicious_status":"benign",
-    "malicious_probability":0.0052047842
+    "malicious_probability":0.0141302692
   },
   {
     "file_path":"source\\python-packages-1757595213589\\source\\pip\\_internal\\metadata\\importlib\\_dists.py",
@@ -417,7 +417,7 @@
     "file_path":"source\\python-packages-1757595213589\\source\\pip\\_internal\\models\\installation_report.py",
     "file_name":"installation_report.py",
     "malicious_status":"benign",
-    "malicious_probability":0.0066482066
+    "malicious_probability":0.0150092058
   },
   {
     "file_path":"source\\python-packages-1757595213589\\source\\pip\\_internal\\models\\link.py",
@@ -567,13 +567,13 @@
     "file_path":"source\\python-packages-1757595213589\\source\\pip\\_internal\\operations\\build\\wheel.py",
     "file_name":"wheel.py",
     "malicious_status":"benign",
-    "malicious_probability":0.0215801597
+    "malicious_probability":0.03492295
   },
   {
     "file_path":"source\\python-packages-1757595213589\\source\\pip\\_internal\\operations\\build\\wheel_editable.py",
     "file_name":"wheel_editable.py",
     "malicious_status":"benign",
-    "malicious_probability":0.0122621357
+    "malicious_probability":0.0278746989
   },
   {
     "file_path":"source\\python-packages-1757595213589\\source\\pip\\_internal\\operations\\build\\wheel_legacy.py",
@@ -765,13 +765,13 @@
     "file_path":"source\\python-packages-1757595213589\\source\\pip\\_internal\\utils\\egg_link.py",
     "file_name":"egg_link.py",
     "malicious_status":"benign",
-    "malicious_probability":0.0124567021
+    "malicious_probability":0.0121260062
   },
   {
     "file_path":"source\\python-packages-1757595213589\\source\\pip\\_internal\\utils\\entrypoints.py",
     "file_name":"entrypoints.py",
     "malicious_status":"benign",
-    "malicious_probability":0.0046200156
+    "malicious_probability":0.0844150409
   },
   {
     "file_path":"source\\python-packages-1757595213589\\source\\pip\\_internal\\utils\\filesystem.py",
@@ -1233,7 +1233,7 @@
     "file_path":"source\\python-packages-1757595213589\\source\\pip\\_vendor\\packaging\\_parser.py",
     "file_name":"_parser.py",
     "malicious_status":"benign",
-    "malicious_probability":0.0074769598
+    "malicious_probability":0.0343680605
   },
   {
     "file_path":"source\\python-packages-1757595213589\\source\\pip\\_vendor\\packaging\\_structures.py",
@@ -1251,7 +1251,7 @@
     "file_path":"source\\python-packages-1757595213589\\source\\pip\\_vendor\\packaging\\__init__.py",
     "file_name":"__init__.py",
     "malicious_status":"malicious",
-    "malicious_probability":0.9526751041
+    "malicious_probability":0.9526799917
   },
   {
     "file_path":"source\\python-packages-1757595213589\\source\\pip\\_vendor\\packaging\\licenses\\_spdx.py",
@@ -1263,7 +1263,7 @@
     "file_path":"source\\python-packages-1757595213589\\source\\pip\\_vendor\\packaging\\licenses\\__init__.py",
     "file_name":"__init__.py",
     "malicious_status":"benign",
-    "malicious_probability":0.0161424708
+    "malicious_probability":0.0150168855
   },
   {
     "file_path":"source\\python-packages-1757595213589\\source\\pip\\_vendor\\pkg_resources\\__init__.py",
@@ -1316,8 +1316,8 @@
   {
     "file_path":"source\\python-packages-1757595213589\\source\\pip\\_vendor\\platformdirs\\__main__.py",
     "file_name":"__main__.py",
-    "malicious_status":"malicious",
-    "malicious_probability":0.5528577566
+    "malicious_status":"benign",
+    "malicious_probability":0.1019524559
   },
   {
     "file_path":"source\\python-packages-1757595213589\\source\\pip\\_vendor\\pygments\\console.py",
@@ -1689,7 +1689,7 @@
     "file_path":"source\\python-packages-1757595213589\\source\\pip\\_vendor\\rich\\color_triplet.py",
     "file_name":"color_triplet.py",
     "malicious_status":"benign",
-    "malicious_probability":0.0380981378
+    "malicious_probability":0.0165269114
   },
   {
     "file_path":"source\\python-packages-1757595213589\\source\\pip\\_vendor\\rich\\columns.py",
@@ -1749,7 +1749,7 @@
     "file_path":"source\\python-packages-1757595213589\\source\\pip\\_vendor\\rich\\filesize.py",
     "file_name":"filesize.py",
     "malicious_status":"benign",
-    "malicious_probability":0.0093982033
+    "malicious_probability":0.0511088595
   },
   {
     "file_path":"source\\python-packages-1757595213589\\source\\pip\\_vendor\\rich\\file_proxy.py",
@@ -2067,13 +2067,13 @@
     "file_path":"source\\python-packages-1757595213589\\source\\pip\\_vendor\\rich\\_timer.py",
     "file_name":"_timer.py",
     "malicious_status":"benign",
-    "malicious_probability":0.0289241765
+    "malicious_probability":0.0503136292
   },
   {
     "file_path":"source\\python-packages-1757595213589\\source\\pip\\_vendor\\rich\\_win32_console.py",
     "file_name":"_win32_console.py",
     "malicious_status":"benign",
-    "malicious_probability":0.0232617054
+    "malicious_probability":0.0346413441
   },
   {
     "file_path":"source\\python-packages-1757595213589\\source\\pip\\_vendor\\rich\\_windows.py",
@@ -2115,7 +2115,7 @@
     "file_path":"source\\python-packages-1757595213589\\source\\pip\\_vendor\\tomli\\_re.py",
     "file_name":"_re.py",
     "malicious_status":"benign",
-    "malicious_probability":0.0433942154
+    "malicious_probability":0.036556609
   },
   {
     "file_path":"source\\python-packages-1757595213589\\source\\pip\\_vendor\\tomli\\_types.py",
@@ -2151,7 +2151,7 @@
     "file_path":"source\\python-packages-1757595213589\\source\\pip\\_vendor\\truststore\\_macos.py",
     "file_name":"_macos.py",
     "malicious_status":"benign",
-    "malicious_probability":0.0109893773
+    "malicious_probability":0.0201976597
   },
   {
     "file_path":"source\\python-packages-1757595213589\\source\\pip\\_vendor\\truststore\\_openssl.py",
@@ -2421,7 +2421,7 @@
     "file_path":"source\\python-packages-1757595213589\\source\\uv\\__init__.py",
     "file_name":"__init__.py",
     "malicious_status":"benign",
-    "malicious_probability":0.0282026082
+    "malicious_probability":0.0371490866
   },
   {
     "file_path":"source\\python-packages-1757595213589\\source\\uv\\__main__.py",

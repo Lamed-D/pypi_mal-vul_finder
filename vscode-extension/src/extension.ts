@@ -40,7 +40,7 @@ async function createPythonOnlyZipFromFolder(folderPath: string): Promise<string
     }
 
     vscode.window.showInformationMessage(`Found ${fileCount} Python files. Creating zip...`);
-
+                                    
     // Create ZIP file
     const zipPath = path.join(os.tmpdir(), `upload-${Date.now()}.zip`);
     await new Promise<void>((resolve, reject) => {
@@ -130,7 +130,7 @@ async function getInstalledPackages(): Promise<string[]> {
 async function getInstalledPackagesFromTable(): Promise<{ name: string; version: string }[]> {
   try {
     const { stdout } = await execAsync('pip list');
-    const lines = stdout.split('\n').map(l => l.trim()).filter(Boolean);
+    const lines = stdout.split('\n').map((l: string) => l.trim()).filter(Boolean);
     const results: { name: string; version: string }[] = [];
 
     for (let i = 0; i < lines.length; i++) {
@@ -238,7 +238,7 @@ async function createPythonPackagesZip(): Promise<string> {
       fs.writeFileSync(path.join(metadataDir, `${packageName}.txt`), pipShowInfo);
       
       if (fileCount > 0) {
-        console.log(`Extracted ${fileCount} files from ${packageName}`);
+        // console.log(`Extracted ${fileCount} files from ${packageName}`);
       }
     }
 
@@ -296,7 +296,7 @@ export function activate(context: vscode.ExtensionContext) {
       vscode.window.showInformationMessage(
         `${statusMessage} 세션 ID: ${result.session_id}`,
         '대시보드 열기'
-      ).then(selection => {
+      ).then((selection: string | undefined) => {
         if (selection === '대시보드 열기') {
           vscode.env.openExternal(vscode.Uri.parse(result.dashboard_url));
         }

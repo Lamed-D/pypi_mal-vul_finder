@@ -5,8 +5,9 @@
 # - safepy_3: 취약점 분석 LSTM 모델
 # - safepy_3_malicious: 악성코드 분석 LSTM 모델
 
-# Python 버전 요구사항
-python>=3.8,<3.11
+# Python 버전 요구사항 (참고용 - pip로 설치 불가)
+# Python 3.12.10 테스트
+# python>=3.8,<3.12
 
 # =============================================================================
 # 웹 서버 프레임워크 (python-server)
@@ -37,8 +38,8 @@ numpy==1.26.4             # 수치 계산
 gensim==4.3.3             # Word2Vec 모델 (코드 토큰 임베딩)
 
 # BERT 모델 (codebert_mal + codebert_test2)
-torch==2.1.2              # PyTorch (BERT 모델 실행)
-transformers==4.40.2      # Hugging Face Transformers (BERT 모델)
+torch==2.2.2              # PyTorch (BERT 모델 실행)
+transformers==4.56.1      # Hugging Face Transformers (BERT 모델)
 
 # =============================================================================
 # 파일 처리 및 유틸리티

@@ -207,7 +207,7 @@ source\python-packages-1757595213589\source\pip\_vendor\packaging\_musllinux.py,
 source\python-packages-1757595213589\source\pip\_vendor\packaging\_parser.py,_parser.py,Benign,Benign
 source\python-packages-1757595213589\source\pip\_vendor\packaging\_structures.py,_structures.py,Benign,Benign
 source\python-packages-1757595213589\source\pip\_vendor\packaging\_tokenizer.py,_tokenizer.py,Benign,Benign
-source\python-packages-1757595213589\source\pip\_vendor\packaging\__init__.py,__init__.py,Vulnerable,CWE-538
+source\python-packages-1757595213589\source\pip\_vendor\packaging\__init__.py,__init__.py,Vulnerable,CWE-79
 source\python-packages-1757595213589\source\pip\_vendor\packaging\licenses\_spdx.py,_spdx.py,Benign,Benign
 source\python-packages-1757595213589\source\pip\_vendor\packaging\licenses\__init__.py,__init__.py,Benign,Benign
 source\python-packages-1757595213589\source\pip\_vendor\pkg_resources\__init__.py,__init__.py,Benign,Benign

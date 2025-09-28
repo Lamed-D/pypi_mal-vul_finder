@@ -102,6 +102,10 @@ safepy_3_malicious/source/**
 safepy_3_malicious_ML/source/**
 codebert_mal/source/**
 
+# Extracted packages directories (압축 해제된 패키지 디렉토리)
+codebert_mal/extracted_packages/**
+codebert_test2/extracted_packages/**
+
 # Analysis results and logs (분석 결과 및 로그 파일)
 #codebert_test2/logs/
 #safepy_3/result/

@@ -1251,7 +1251,7 @@
     "file_path":"source\\python-packages-1757595213589\\source\\pip\\_vendor\\packaging\\__init__.py",
     "file_name":"__init__.py",
     "vulnerability_status":"Vulnerable",
-    "cwe_label":"CWE-538"
+    "cwe_label":"CWE-79"
   },
   {
     "file_path":"source\\python-packages-1757595213589\\source\\pip\\_vendor\\packaging\\licenses\\_spdx.py",
