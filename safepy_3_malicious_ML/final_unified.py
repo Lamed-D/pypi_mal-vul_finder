@@ -365,23 +365,15 @@ class FinalUnifiedAnalyzer:
     # LSTM 분석 관련 메서드들
     def detect_encoding(self, file_path):
         """파일 인코딩 감지"""
-        if HAS_CHARDET:
-            try:
-                with open(file_path, 'rb') as f:
-                    sample = f.read(10000)
-                    result = chardet.detect(sample)
-                    if result['confidence'] > 0.7:
-                        return [result['encoding']]
-            except Exception as e:
-                print(f"인코딩 감지 오류: {e}")
-        
-        return ['cp949', 'euc-kr', 'utf-8', 'utf-16', 'latin-1', 'iso-8859-1']
+        # CSV 파일의 경우 일반적인 인코딩들을 우선 시도
+        return ['utf-8', 'cp949', 'euc-kr', 'utf-16', 'latin-1', 'iso-8859-1']
 
     def read_csv_data(self, csv_file_path):
         """CSV 파일 읽기 (인코딩 자동 감지)"""
         print(f"CSV 파일 읽기 시도: {csv_file_path}")
         
         encodings = self.detect_encoding(csv_file_path)
+        print(f"감지된 인코딩 목록: {encodings}")
         
         for encoding in encodings:
             try:
