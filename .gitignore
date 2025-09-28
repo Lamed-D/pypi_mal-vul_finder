@@ -94,7 +94,6 @@ server/logs/
 codebert_mal/model/codebert/model.safetensors
 codebert_test2/model/codebert/model.safetensors
 server/models/codebert/codebert/model.safetensors
-unified/plated-mantis-471407-m4-b14f1b3e761d.json
 
 # Extracted sources from ZIPs (do not commit extracted directories)
 codebert_test2/source/**
