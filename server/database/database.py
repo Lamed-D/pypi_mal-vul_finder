@@ -106,7 +106,7 @@ def get_db() -> Session:
     finally:
         pass
 
-def save_analysis_results(session_id: str, results: List[Dict[str, Any]], upload_info: Dict[str, Any]) -> Dict[str, Any]:
+def save_analysis_results(session_id: str, results: List[Dict[str, Any]], upload_info: Dict[str, Any], mode: str = "both") -> Dict[str, Any]:
     """분석 결과를 통합 데이터베이스에 저장"""
     db = get_db()
     try:
@@ -118,44 +118,56 @@ def save_analysis_results(session_id: str, results: List[Dict[str, Any]], upload
         for result in results:
             # 분석 시간 누적
             total_analysis_time += result.get("analysis_time", 0.0)
-            
-            # 취약점 분석 결과 저장
+
+            # 모드별 저장 로직 - 실제 문제가 있는 파일만 저장
+            if mode in ("both", "vul"):
+                # 취약점 분석 결과 저장 (실제 취약한 파일만)
+                vul_analysis = result.get("vulnerability_analysis", {})
+                is_vulnerable = bool(vul_analysis.get("is_vulnerable", False))
+                if is_vulnerable:
+                    vulnerability_results += 1
+                    # 실제 취약한 파일만 LSTM_VUL 테이블에 저장
+                    vul_record = LSTM_VUL(
+                        session_id=session_id,
+                        file_path=result.get("file_path", ""),
+                        file_name=result.get("file_name", ""),
+                        file_size=result.get("file_size", 0),
+                        vulnerability_status="Vulnerable",
+                        vulnerability_probability=vul_analysis.get("vulnerability_probability", 0.0),
+                        vulnerability_label=vul_analysis.get("vulnerability_label", ""),
+                        cwe_label=vul_analysis.get("cwe_label", ""),
+                        analysis_time=result.get("analysis_time", 0.0),
+                        upload_time=upload_info.get("upload_time", datetime.utcnow())
+                    )
+                    db.add(vul_record)
+
+            if mode in ("both", "mal"):
+                # 악성 코드 분석 결과 저장 (실제 악성인 파일만)
+                mal_analysis = result.get("malicious_analysis", {})
+                is_malicious = bool(mal_analysis.get("is_malicious", False))
+                if is_malicious:
+                    malicious_results += 1
+                    # 실제 악성인 파일만 LSTM_MAL 테이블에 저장
+                    mal_record = LSTM_MAL(
+                        session_id=session_id,
+                        file_path=result.get("file_path", ""),
+                        file_name=result.get("file_name", ""),
+                        file_size=result.get("file_size", 0),
+                        malicious_status="malicious",
+                        malicious_probability=mal_analysis.get("malicious_probability", 0.0),
+                        malicious_label=mal_analysis.get("malicious_label", ""),
+                        analysis_time=result.get("analysis_time", 0.0),
+                        upload_time=upload_info.get("upload_time", datetime.utcnow())
+                    )
+                    db.add(mal_record)
+
+            # 안전한 파일 카운트 (취약하지도 않고 악성도 아닌 파일)
             vul_analysis = result.get("vulnerability_analysis", {})
-            if vul_analysis.get("is_vulnerable", False):
-                vulnerability_results += 1
-                vul_record = LSTM_VUL(
-                    session_id=session_id,
-                    file_path=result.get("file_path", ""),
-                    file_name=result.get("file_name", ""),
-                    file_size=result.get("file_size", 0),
-                    vulnerability_status=vul_analysis.get("vulnerability_status", "Vulnerable"),
-                    vulnerability_probability=vul_analysis.get("vulnerability_probability", 0.0),
-                    vulnerability_label=vul_analysis.get("vulnerability_label", ""),
-                    cwe_label=vul_analysis.get("cwe_label", ""),
-                    analysis_time=result.get("analysis_time", 0.0),
-                    upload_time=upload_info.get("upload_time", datetime.utcnow())
-                )
-                db.add(vul_record)
-            
-            # 악성 코드 분석 결과 저장
             mal_analysis = result.get("malicious_analysis", {})
-            if mal_analysis.get("is_malicious", False):
-                malicious_results += 1
-                mal_record = LSTM_MAL(
-                    session_id=session_id,
-                    file_path=result.get("file_path", ""),
-                    file_name=result.get("file_name", ""),
-                    file_size=result.get("file_size", 0),
-                    malicious_status=mal_analysis.get("malicious_status", "malicious"),
-                    malicious_probability=mal_analysis.get("malicious_probability", 0.0),
-                    malicious_label=mal_analysis.get("malicious_label", ""),
-                    analysis_time=result.get("analysis_time", 0.0),
-                    upload_time=upload_info.get("upload_time", datetime.utcnow())
-                )
-                db.add(mal_record)
+            is_vulnerable = bool(vul_analysis.get("is_vulnerable", False))
+            is_malicious = bool(mal_analysis.get("is_malicious", False))
             
-            # 안전한 파일 카운트
-            if result.get("is_safe", False):
+            if not is_vulnerable and not is_malicious:
                 safe_files += 1
         
         # main_log에 요약 저장

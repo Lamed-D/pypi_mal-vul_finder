@@ -96,7 +96,7 @@ async def shutdown_event():
 # =============================================================================
 
 @app.get("/", response_class=HTMLResponse)
-async def dashboard():
+async def dashboard(request: Request):
     """
     메인 대시보드 페이지
     
@@ -122,7 +122,7 @@ async def dashboard():
         
         # 대시보드 템플릿 렌더링 및 반환
         return templates.TemplateResponse("dashboard.html", {
-            "request": {},
+            "request": request,
             "recent_sessions": recent_sessions,
             "stats": stats
         })
@@ -219,8 +219,8 @@ async def upload_file(
         
         # Session will be created in integrated database after analysis
         
-        # Start integrated multiprocess analysis in background
-        asyncio.create_task(analyze_file_integrated_async(session_id, str(file_path), file.filename, len(file_content)))
+        # Start integrated multiprocess analysis in background (both mode)
+        asyncio.create_task(analyze_file_integrated_async(session_id, str(file_path), file.filename, len(file_content), "both"))
         
         return JSONResponse({
             "session_id": session_id,
@@ -232,8 +232,133 @@ async def upload_file(
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
-async def analyze_file_integrated_async(session_id: str, file_path: str, filename: str, file_size: int):
-    """통합 다중 프로세스 백그라운드 분석 작업 - ZIP → .py 추출 → 병렬 분석 → DB 저장"""
+@app.post("/api/v1/upload/lstm")
+async def upload_file_lstm_both(
+    file: UploadFile = File(...)
+):
+    """Upload ZIP file for LSTM analysis (both vulnerability and malicious)"""
+    try:
+        # Validate file
+        if not file.filename:
+            raise HTTPException(status_code=400, detail="No filename provided")
+        
+        file_extension = Path(file.filename).suffix.lower()
+        if file_extension not in ALLOWED_EXTENSIONS:
+            raise HTTPException(status_code=400, detail="Only ZIP files are allowed")
+        
+        # Check file size
+        file_content = await file.read()
+        if len(file_content) > MAX_FILE_SIZE:
+            raise HTTPException(status_code=400, detail="File too large")
+        
+        # Generate session ID
+        session_id = str(uuid.uuid4())
+        
+        # Save file
+        file_path = file_service.save_uploaded_file(file_content, session_id, file.filename)
+        
+        # Start integrated multiprocess analysis in background (both mode)
+        asyncio.create_task(analyze_file_integrated_async(session_id, str(file_path), file.filename, len(file_content), "both"))
+        
+        return JSONResponse({
+            "session_id": session_id,
+            "filename": file.filename,
+            "status": "uploaded",
+            "mode": "both",
+            "message": "File uploaded successfully. LSTM analysis (both vulnerability and malicious) started."
+        })
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/api/v1/upload/lstm/mal")
+async def upload_file_lstm_malicious(
+    file: UploadFile = File(...)
+):
+    """Upload ZIP file for LSTM malicious code analysis only"""
+    try:
+        # Validate file
+        if not file.filename:
+            raise HTTPException(status_code=400, detail="No filename provided")
+        
+        file_extension = Path(file.filename).suffix.lower()
+        if file_extension not in ALLOWED_EXTENSIONS:
+            raise HTTPException(status_code=400, detail="Only ZIP files are allowed")
+        
+        # Check file size
+        file_content = await file.read()
+        if len(file_content) > MAX_FILE_SIZE:
+            raise HTTPException(status_code=400, detail="File too large")
+        
+        # Generate session ID
+        session_id = str(uuid.uuid4())
+        
+        # Save file
+        file_path = file_service.save_uploaded_file(file_content, session_id, file.filename)
+        
+        # Start integrated multiprocess analysis in background (malicious only)
+        asyncio.create_task(analyze_file_integrated_async(session_id, str(file_path), file.filename, len(file_content), "mal"))
+        
+        return JSONResponse({
+            "session_id": session_id,
+            "filename": file.filename,
+            "status": "uploaded",
+            "mode": "malicious",
+            "message": "File uploaded successfully. LSTM malicious code analysis started."
+        })
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/api/v1/upload/lstm/vul")
+async def upload_file_lstm_vulnerability(
+    file: UploadFile = File(...)
+):
+    """Upload ZIP file for LSTM vulnerability analysis only"""
+    try:
+        # Validate file
+        if not file.filename:
+            raise HTTPException(status_code=400, detail="No filename provided")
+        
+        file_extension = Path(file.filename).suffix.lower()
+        if file_extension not in ALLOWED_EXTENSIONS:
+            raise HTTPException(status_code=400, detail="Only ZIP files are allowed")
+        
+        # Check file size
+        file_content = await file.read()
+        if len(file_content) > MAX_FILE_SIZE:
+            raise HTTPException(status_code=400, detail="File too large")
+        
+        # Generate session ID
+        session_id = str(uuid.uuid4())
+        
+        # Save file
+        file_path = file_service.save_uploaded_file(file_content, session_id, file.filename)
+        
+        # Start integrated multiprocess analysis in background (vulnerability only)
+        asyncio.create_task(analyze_file_integrated_async(session_id, str(file_path), file.filename, len(file_content), "vul"))
+        
+        return JSONResponse({
+            "session_id": session_id,
+            "filename": file.filename,
+            "status": "uploaded",
+            "mode": "vulnerability",
+            "message": "File uploaded successfully. LSTM vulnerability analysis started."
+        })
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+async def analyze_file_integrated_async(session_id: str, file_path: str, filename: str, file_size: int, mode: str = "both"):
+    """통합 다중 프로세스 백그라운드 분석 작업 - ZIP → .py 추출 → 병렬 분석 → DB 저장
+    
+    Args:
+        session_id: 세션 ID
+        file_path: 파일 경로
+        filename: 파일명
+        file_size: 파일 크기
+        mode: 'both' | 'mal' | 'vul'
+    """
     try:
         print(f"🚀 Starting integrated multiprocess analysis for session {session_id}")
         print(f"📦 Processing ZIP file: {filename} ({file_size} bytes)")
@@ -250,12 +375,12 @@ async def analyze_file_integrated_async(session_id: str, file_path: str, filenam
                 "filename": filename,
                 "file_size": file_size
             }
-            save_analysis_results(session_id, [], upload_info)
+            save_analysis_results(session_id, [], upload_info, mode)
             return
         
         # 2. 통합 다중 프로세스 분석 실행 (3개 프로세스 제한)
-        print(f"🔍 Starting multiprocess analysis with 3 workers for {len(extracted_files)} files")
-        analysis_result = await integrated_analyzer.analyze_files_multiprocess(session_id, extracted_files)
+        print(f"🔍 Starting multiprocess analysis with 3 workers for {len(extracted_files)} files (mode: {mode})")
+        analysis_result = await integrated_analyzer.analyze_files_multiprocess(session_id, extracted_files, mode)
         
         if analysis_result["status"] == "completed":
             # 3. 결과를 분리된 DB 테이블에 저장
@@ -268,7 +393,8 @@ async def analyze_file_integrated_async(session_id: str, file_path: str, filenam
             save_result = save_analysis_results(
                 session_id, 
                 analysis_result["results"], 
-                upload_info
+                upload_info,
+                mode
             )
             
             print(f"✅ Integrated analysis completed for session {session_id}")
@@ -491,7 +617,7 @@ async def get_source_code(session_id: str, file_path: str):
                     print(f"  Directory: {search_dir}")
                     for item in search_dir.rglob("*.py"):
                         print(f"    - {item}")
-            raise HTTPException(status_code=404, detail=f"File not found: {original_path}")
+            raise HTTPException(status_code=404, detail=f"File not found: {file_path}")
         
         print(f"🔍 Found file at: {file_full_path}")
         

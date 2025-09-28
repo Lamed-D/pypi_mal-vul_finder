@@ -112,6 +112,27 @@
                         <h5><i class="fas fa-upload"></i> Upload ZIP File for Analysis</h5>
                     </div>
                     <div class="card-body">
+                        <!-- Analysis Mode Selection -->
+                        <div class="mb-3">
+                            <label class="form-label"><i class="fas fa-cogs"></i> Analysis Mode:</label>
+                            <div class="btn-group w-100" role="group" aria-label="Analysis mode selection">
+                                <input type="radio" class="btn-check" name="analysisMode" id="modeBoth" value="both" checked>
+                                <label class="btn btn-outline-primary" for="modeBoth">
+                                    <i class="fas fa-shield-alt"></i> Both (Vulnerability + Malicious)
+                                </label>
+
+                                <input type="radio" class="btn-check" name="analysisMode" id="modeMal" value="mal">
+                                <label class="btn btn-outline-danger" for="modeMal">
+                                    <i class="fas fa-skull-crossbones"></i> Malicious Only
+                                </label>
+
+                                <input type="radio" class="btn-check" name="analysisMode" id="modeVul" value="vul">
+                                <label class="btn btn-outline-warning" for="modeVul">
+                                    <i class="fas fa-exclamation-triangle"></i> Vulnerability Only
+                                </label>
+                            </div>
+                        </div>
+                        
                         <div class="upload-area" id="uploadArea">
                             <i class="fas fa-cloud-upload-alt fa-3x mb-3"></i>
                             <h5>Drag & Drop ZIP file here</h5>
@@ -174,7 +195,12 @@
                         <h5><i class="fas fa-chart-pie"></i> Analysis Overview</h5>
                     </div>
                     <div class="card-body">
-                        <canvas id="analysisChart" width="400" height="400"></canvas>
+                        <canvas id="analysisChart" 
+                                width="400" 
+                                height="400"
+                                data-safe-files="{{ stats.safe_files }}"
+                                data-malicious-files="{{ stats.malicious_files }}"
+                                data-vulnerable-files="{{ stats.vulnerable_files }}"></canvas>
                     </div>
                 </div>
             </div>
@@ -251,7 +277,23 @@
             uploadStatus.textContent = 'Uploading...';
 
             try {
-                const response = await fetch('/api/v1/upload', {
+                // 선택된 분석 모드에 따라 API 엔드포인트 결정
+                const selectedMode = document.querySelector('input[name="analysisMode"]:checked').value;
+                let apiEndpoint = '/api/v1/upload'; // 기본값
+                
+                switch(selectedMode) {
+                    case 'both':
+                        apiEndpoint = '/api/v1/upload/lstm';
+                        break;
+                    case 'mal':
+                        apiEndpoint = '/api/v1/upload/lstm/mal';
+                        break;
+                    case 'vul':
+                        apiEndpoint = '/api/v1/upload/lstm/vul';
+                        break;
+                }
+                
+                const response = await fetch(apiEndpoint, {
                     method: 'POST',
                     body: formData
                 });
@@ -259,7 +301,12 @@
                 const result = await response.json();
 
                 if (response.ok) {
-                    uploadStatus.textContent = 'Upload successful! Analysis started...';
+                    const modeText = {
+                        'both': 'Vulnerability + Malicious analysis',
+                        'mal': 'Malicious code analysis',
+                        'vul': 'Vulnerability analysis'
+                    };
+                    uploadStatus.textContent = `Upload successful! ${modeText[selectedMode]} started...`;
                     uploadProgress.querySelector('.progress-bar').style.width = '100%';
                     
                     // Refresh the page after a short delay
@@ -337,16 +384,18 @@
 
         // Initialize chart
         const ctx = document.getElementById('analysisChart').getContext('2d');
+        
+        // Chart data from server (using data attributes)
+        const safeFiles = parseInt(document.getElementById('analysisChart').getAttribute('data-safe-files') || '0');
+        const maliciousFiles = parseInt(document.getElementById('analysisChart').getAttribute('data-malicious-files') || '0');
+        const vulnerableFiles = parseInt(document.getElementById('analysisChart').getAttribute('data-vulnerable-files') || '0');
+        
         const analysisChart = new Chart(ctx, {
             type: 'doughnut',
             data: {
                 labels: ['Safe Files', 'Malicious Files', 'Vulnerable Files'],
                 datasets: [{
-                    data: [
-                        {{ stats.safe_files }},
-                        {{ stats.malicious_files }},
-                        {{ stats.vulnerable_files }}
-                    ],
+                    data: [safeFiles, maliciousFiles, vulnerableFiles],
                     backgroundColor: [
                         '#28a745',
                         '#dc3545',

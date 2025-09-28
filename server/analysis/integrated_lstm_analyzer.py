@@ -183,15 +183,15 @@ class IntegratedLSTMAnalyzer:
                 predicted_cwe = self.vul_label_encoder_full.inverse_transform([predicted_cwe_index])[0]
                 cwe_label = predicted_cwe
             else:
-                cwe_label = 'Benign'
+                cwe_label = 'Safe'
             
             is_vulnerable = predicted_vulnerability_status == 1
             
             result = {
                 "is_vulnerable": is_vulnerable,
                 "vulnerability_probability": float(prediction_final[0][0]),
-                "vulnerability_status": "Vulnerable" if is_vulnerable else "Benign",
-                "vulnerability_label": "Vulnerable" if predicted_vulnerability_status == 1 else "Benign",
+                "vulnerability_status": "Vulnerable" if is_vulnerable else "Safe",
+                "vulnerability_label": "Vulnerable" if predicted_vulnerability_status == 1 else "Safe",
                 "cwe_label": cwe_label
             }
             
@@ -232,13 +232,13 @@ class IntegratedLSTMAnalyzer:
             decoded_label = self.mal_label_encoder.inverse_transform([predicted_index])[0]
             
             # 악성 여부 판단
-            benign_aliases = {"Benign", "benign", "Not Vulnerable", "Normal", "Safe", "0", 0}
-            is_benign = decoded_label in benign_aliases
+            safe_aliases = {"Benign", "benign", "Not Vulnerable", "Normal", "Safe", "0", 0}
+            is_safe = decoded_label in safe_aliases
             
             result = {
-                "is_malicious": not is_benign,
+                "is_malicious": not is_safe,
                 "malicious_probability": malicious_probability,
-                "malicious_status": "malicious" if not is_benign else "benign",
+                "malicious_status": "malicious" if not is_safe else "Safe",
                 "malicious_label": decoded_label
             }
             
@@ -247,15 +247,21 @@ class IntegratedLSTMAnalyzer:
         except Exception as e:
             return {"is_malicious": False, "error": str(e)}
     
-    def analyze_single_file(self, content: str, file_path: str) -> Dict[str, Any]:
-        """단일 파일 분석 - 취약점 + 악성 코드"""
+    def analyze_single_file(self, content: str, file_path: str, mode: str = "both") -> Dict[str, Any]:
+        """단일 파일 분석 - mode에 따라 취약/악성/둘다 수행
+
+        Args:
+            content: 파일 내용
+            file_path: 파일 경로
+            mode: 'both' | 'mal' | 'vul'
+        """
         start_time = time.time()
         
         # 취약점 분석 (safepy_3)
-        vul_result = self.analyze_vulnerability(content, file_path)
+        vul_result = self.analyze_vulnerability(content, file_path) if mode in ("both", "vul") else {"is_vulnerable": False}
         
         # 악성 코드 분석 (safepy_3_malicious)
-        mal_result = self.analyze_malicious(content, file_path)
+        mal_result = self.analyze_malicious(content, file_path) if mode in ("both", "mal") else {"is_malicious": False}
         
         analysis_time = time.time() - start_time
         
@@ -267,8 +273,14 @@ class IntegratedLSTMAnalyzer:
             "is_safe": not (vul_result.get("is_vulnerable", False) or mal_result.get("is_malicious", False))
         }
     
-    async def analyze_files_multiprocess(self, session_id: str, files: List[Dict[str, Any]]) -> Dict[str, Any]:
-        """다중 프로세스로 파일들 분석 (3개 프로세스 제한)"""
+    async def analyze_files_multiprocess(self, session_id: str, files: List[Dict[str, Any]], mode: str = "both") -> Dict[str, Any]:
+        """다중 프로세스로 파일들 분석 (3개 프로세스 제한)
+
+        Args:
+            session_id: 세션 ID
+            files: {path, content, size} 리스트
+            mode: 'both' | 'mal' | 'vul'
+        """
         try:
             # 프로세스 풀 초기화
             if self.executor is None:
@@ -284,7 +296,7 @@ class IntegratedLSTMAnalyzer:
             # 병렬 분석 실행
             futures = []
             for i, chunk in enumerate(file_chunks):
-                future = self.executor.submit(analyze_file_chunk_worker, chunk, session_id, i, str(self.models_dir))
+                future = self.executor.submit(analyze_file_chunk_worker, chunk, session_id, i, str(self.models_dir), mode)
                 futures.append(future)
                 self.active_tasks[session_id] = self.active_tasks.get(session_id, []) + [future]
             
@@ -338,8 +350,11 @@ class IntegratedLSTMAnalyzer:
             self.executor.shutdown(wait=True)
             self.executor = None
 
-def analyze_file_chunk_worker(files: List[Dict[str, Any]], session_id: str, chunk_id: int, models_dir: str) -> List[Dict[str, Any]]:
-    """파일 청크 분석 워커 (별도 프로세스에서 실행)"""
+def analyze_file_chunk_worker(files: List[Dict[str, Any]], session_id: str, chunk_id: int, models_dir: str, mode: str = "both") -> List[Dict[str, Any]]:
+    """파일 청크 분석 워커 (별도 프로세스에서 실행)
+
+    mode: 'both' | 'mal' | 'vul'
+    """
     results = []
     
     try:
@@ -355,7 +370,7 @@ def analyze_file_chunk_worker(files: List[Dict[str, Any]], session_id: str, chun
                     print(f"⚠️ Empty content for file {file_info['path']}")
                     continue
                 
-                result = analyzer.analyze_single_file(file_info["content"], file_info["path"])
+                result = analyzer.analyze_single_file(file_info["content"], file_info["path"], mode=mode)
                 result["session_id"] = session_id
                 result["file_name"] = file_info["name"]
                 result["file_size"] = file_info["size"]

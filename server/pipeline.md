@@ -109,11 +109,19 @@ ZIP 압축 해제 → Python 파일 추출 → 파일 내용 읽기 → 메모�
 - `GET /session/{session_id}/malicious` - 악성코드 분석 결과
 
 ### REST API
-- `POST /api/v1/upload` - 파일 업로드
+
+#### 파일 업로드 (분석 모드별)
+- `POST /api/v1/upload` - 파일 업로드 (기본: 취약점 + 악성코드 분석)
+- `POST /api/v1/upload/lstm` - LSTM 통합 분석 (취약점 + 악성코드)
+- `POST /api/v1/upload/lstm/mal` - LSTM 악성코드 분석만
+- `POST /api/v1/upload/lstm/vul` - LSTM 취약점 분석만
+
+#### 세션 및 결과 조회
 - `GET /api/v1/sessions` - 세션 목록
 - `GET /api/v1/sessions/{session_id}` - 세션 정보
 - `GET /api/v1/source/{session_id}/{file_path}` - 세션 기반 소스코드 조회
 - `GET /api/v1/stats` - 분석 통계
+- `GET /health` - 서버 상태 확인
 
 ## 🗄️ 데이터베이스 스키마
 
