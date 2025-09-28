@@ -100,6 +100,70 @@ class LSTM_MAL_SAFE(Base):
     upload_time = Column(DateTime, default=datetime.utcnow)
     created_at = Column(DateTime, default=datetime.utcnow)
 
+class BERT_MAL(Base):
+    """BERT 악성코드 분석 결과 테이블"""
+    __tablename__ = "bert_mal"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    session_id = Column(String, index=True)
+    file_path = Column(String)
+    file_name = Column(String)
+    file_size = Column(Integer)
+    malicious_status = Column(String)
+    malicious_probability = Column(Float)
+    malicious_label = Column(String)
+    analysis_time = Column(Float)
+    upload_time = Column(DateTime, default=datetime.utcnow)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+class BERT_MAL_SAFE(Base):
+    """안전한 파일 (BERT 악성코드 분석 관점) 기록 테이블"""
+    __tablename__ = "bert_mal_safe"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    session_id = Column(String, index=True)
+    file_path = Column(String)
+    file_name = Column(String)
+    file_size = Column(Integer)
+    malicious_status = Column(String)  # 항상 "Safe"
+    malicious_probability = Column(Float)
+    analysis_time = Column(Float)
+    upload_time = Column(DateTime, default=datetime.utcnow)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+class BERT_VUL(Base):
+    """BERT 취약점 분석 결과 테이블"""
+    __tablename__ = "bert_vul"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    session_id = Column(String, index=True)
+    file_path = Column(String)
+    file_name = Column(String)
+    file_size = Column(Integer)
+    vulnerability_status = Column(String)
+    vulnerability_probability = Column(Float)
+    vulnerability_label = Column(String)
+    cwe_label = Column(String)
+    analysis_time = Column(Float)
+    upload_time = Column(DateTime, default=datetime.utcnow)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+class BERT_VUL_SAFE(Base):
+    """안전한 파일 (BERT 취약점 분석 관점) 기록 테이블"""
+    __tablename__ = "bert_vul_safe"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    session_id = Column(String, index=True)
+    file_path = Column(String)
+    file_name = Column(String)
+    file_size = Column(Integer)
+    vulnerability_status = Column(String)  # 항상 "Safe"
+    vulnerability_probability = Column(Float)
+    cwe_label = Column(String)
+    analysis_time = Column(Float)
+    upload_time = Column(DateTime, default=datetime.utcnow)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
 class main_log(Base):
     """안전한 파일 요약 로그 테이블"""
     __tablename__ = "main_log"
@@ -117,6 +181,8 @@ class main_log(Base):
     malicious_files = Column(Integer)
     vul_flag = Column(Boolean, default=False)
     mal_flag = Column(Boolean, default=False)
+    is_bert = Column(Boolean, default=False) # BERT 모델 사용 여부
+    is_mal = Column(Boolean, default=False) # 악성코드 분석 여부 (LSTM/BERT 구분)
     is_safe = Column(Boolean, default=True)
     created_at = Column(DateTime, default=datetime.utcnow)
 
@@ -127,7 +193,8 @@ def init_database():
         Base.metadata.create_all(bind=engine)
         print("✅ Integrated database initialized successfully")
         print(f"📁 Database file: {DB_PATH}")
-        print("📊 Tables created: lstm_vul, lstm_mal, lstm_vul_safe, lstm_mal_safe, main_log")
+        print("📊 Tables created: lstm_vul, lstm_mal, lstm_vul_safe, lstm_mal_safe, bert_mal, bert_mal_safe, bert_vul, bert_vul_safe, main_log")
+        print("🔧 BERT integration: server/models/bert_mal (malicious), server/models/bert_vul (vulnerability)")
     except Exception as e:
         print(f"❌ Error initializing integrated database: {e}")
 
@@ -139,7 +206,7 @@ def get_db() -> Session:
     finally:
         pass
 
-def save_analysis_results(session_id: str, results: List[Dict[str, Any]], upload_info: Dict[str, Any], mode: str = "both") -> Dict[str, Any]:
+def save_analysis_results(session_id: str, results: List[Dict[str, Any]], upload_info: Dict[str, Any], mode: str = "both", is_bert: bool = False) -> Dict[str, Any]:
     """분석 결과를 통합 데이터베이스에 저장"""
     db = get_db()
     try:
@@ -159,33 +226,62 @@ def save_analysis_results(session_id: str, results: List[Dict[str, Any]], upload
                 is_vulnerable = bool(vul_analysis.get("is_vulnerable", False))
                 if is_vulnerable:
                     vulnerability_results += 1
-                    # 실제 취약한 파일만 LSTM_VUL 테이블에 저장
-                    vul_record = LSTM_VUL(
-                        session_id=session_id,
-                        file_path=result.get("file_path", ""),
-                        file_name=result.get("file_name", ""),
-                        file_size=result.get("file_size", 0),
-                        vulnerability_status="Vulnerable",
-                        vulnerability_probability=vul_analysis.get("vulnerability_probability", 0.0),
-                        vulnerability_label=vul_analysis.get("vulnerability_label", ""),
-                        cwe_label=vul_analysis.get("cwe_label", ""),
-                        analysis_time=result.get("analysis_time", 0.0),
-                        upload_time=upload_info.get("upload_time", datetime.utcnow())
-                    )
+                    
+                    if is_bert:
+                        # BERT 취약점 테이블에 저장
+                        vul_record = BERT_VUL(
+                            session_id=session_id,
+                            file_path=result.get("file_path", ""),
+                            file_name=result.get("file_name", ""),
+                            file_size=result.get("file_size", 0),
+                            vulnerability_status="Vulnerable",
+                            vulnerability_probability=vul_analysis.get("vulnerability_probability", 0.0),
+                            vulnerability_label=vul_analysis.get("vulnerability_label", ""),
+                            cwe_label=vul_analysis.get("cwe_label", ""),
+                            analysis_time=result.get("analysis_time", 0.0),
+                            upload_time=upload_info.get("upload_time", datetime.utcnow())
+                        )
+                    else:
+                        # LSTM 취약점 테이블에 저장
+                        vul_record = LSTM_VUL(
+                            session_id=session_id,
+                            file_path=result.get("file_path", ""),
+                            file_name=result.get("file_name", ""),
+                            file_size=result.get("file_size", 0),
+                            vulnerability_status="Vulnerable",
+                            vulnerability_probability=vul_analysis.get("vulnerability_probability", 0.0),
+                            vulnerability_label=vul_analysis.get("vulnerability_label", ""),
+                            cwe_label=vul_analysis.get("cwe_label", ""),
+                            analysis_time=result.get("analysis_time", 0.0),
+                            upload_time=upload_info.get("upload_time", datetime.utcnow())
+                        )
                     db.add(vul_record)
                 else:
-                    # 안전한 파일은 LSTM_VUL_SAFE에 기록
-                    vul_safe = LSTM_VUL_SAFE(
-                        session_id=session_id,
-                        file_path=result.get("file_path", ""),
-                        file_name=result.get("file_name", ""),
-                        file_size=result.get("file_size", 0),
-                        vulnerability_status="Safe",
-                        vulnerability_probability=vul_analysis.get("vulnerability_probability", 0.0),
-                        cwe_label=vul_analysis.get("cwe_label", "Safe"),
-                        analysis_time=result.get("analysis_time", 0.0),
-                        upload_time=upload_info.get("upload_time", datetime.utcnow())
-                    )
+                    # 안전한 파일은 SAFE 테이블에 기록
+                    if is_bert:
+                        vul_safe = BERT_VUL_SAFE(
+                            session_id=session_id,
+                            file_path=result.get("file_path", ""),
+                            file_name=result.get("file_name", ""),
+                            file_size=result.get("file_size", 0),
+                            vulnerability_status="Safe",
+                            vulnerability_probability=vul_analysis.get("vulnerability_probability", 0.0),
+                            cwe_label=vul_analysis.get("cwe_label", "Safe"),
+                            analysis_time=result.get("analysis_time", 0.0),
+                            upload_time=upload_info.get("upload_time", datetime.utcnow())
+                        )
+                    else:
+                        vul_safe = LSTM_VUL_SAFE(
+                            session_id=session_id,
+                            file_path=result.get("file_path", ""),
+                            file_name=result.get("file_name", ""),
+                            file_size=result.get("file_size", 0),
+                            vulnerability_status="Safe",
+                            vulnerability_probability=vul_analysis.get("vulnerability_probability", 0.0),
+                            cwe_label=vul_analysis.get("cwe_label", "Safe"),
+                            analysis_time=result.get("analysis_time", 0.0),
+                            upload_time=upload_info.get("upload_time", datetime.utcnow())
+                        )
                     db.add(vul_safe)
 
             if mode in ("both", "mal"):
@@ -194,31 +290,58 @@ def save_analysis_results(session_id: str, results: List[Dict[str, Any]], upload
                 is_malicious = bool(mal_analysis.get("is_malicious", False))
                 if is_malicious:
                     malicious_results += 1
-                    # 실제 악성인 파일만 LSTM_MAL 테이블에 저장
-                    mal_record = LSTM_MAL(
-                        session_id=session_id,
-                        file_path=result.get("file_path", ""),
-                        file_name=result.get("file_name", ""),
-                        file_size=result.get("file_size", 0),
-                        malicious_status="malicious",
-                        malicious_probability=mal_analysis.get("malicious_probability", 0.0),
-                        malicious_label=mal_analysis.get("malicious_label", ""),
-                        analysis_time=result.get("analysis_time", 0.0),
-                        upload_time=upload_info.get("upload_time", datetime.utcnow())
-                    )
+                    
+                    if is_bert:
+                        # BERT 악성코드 테이블에 저장
+                        mal_record = BERT_MAL(
+                            session_id=session_id,
+                            file_path=result.get("file_path", ""),
+                            file_name=result.get("file_name", ""),
+                            file_size=result.get("file_size", 0),
+                            malicious_status="malicious",
+                            malicious_probability=mal_analysis.get("malicious_probability", 0.0),
+                            malicious_label=mal_analysis.get("malicious_label", ""),
+                            analysis_time=result.get("analysis_time", 0.0),
+                            upload_time=upload_info.get("upload_time", datetime.utcnow())
+                        )
+                    else:
+                        # LSTM 악성코드 테이블에 저장
+                        mal_record = LSTM_MAL(
+                            session_id=session_id,
+                            file_path=result.get("file_path", ""),
+                            file_name=result.get("file_name", ""),
+                            file_size=result.get("file_size", 0),
+                            malicious_status="malicious",
+                            malicious_probability=mal_analysis.get("malicious_probability", 0.0),
+                            malicious_label=mal_analysis.get("malicious_label", ""),
+                            analysis_time=result.get("analysis_time", 0.0),
+                            upload_time=upload_info.get("upload_time", datetime.utcnow())
+                        )
                     db.add(mal_record)
                 else:
-                    # 안전한 파일은 LSTM_MAL_SAFE에 기록
-                    mal_safe = LSTM_MAL_SAFE(
-                        session_id=session_id,
-                        file_path=result.get("file_path", ""),
-                        file_name=result.get("file_name", ""),
-                        file_size=result.get("file_size", 0),
-                        malicious_status="Safe",
-                        malicious_probability=mal_analysis.get("malicious_probability", 0.0),
-                        analysis_time=result.get("analysis_time", 0.0),
-                        upload_time=upload_info.get("upload_time", datetime.utcnow())
-                    )
+                    # 안전한 파일은 SAFE 테이블에 기록
+                    if is_bert:
+                        mal_safe = BERT_MAL_SAFE(
+                            session_id=session_id,
+                            file_path=result.get("file_path", ""),
+                            file_name=result.get("file_name", ""),
+                            file_size=result.get("file_size", 0),
+                            malicious_status="Safe",
+                            malicious_probability=mal_analysis.get("malicious_probability", 0.0),
+                            analysis_time=result.get("analysis_time", 0.0),
+                            upload_time=upload_info.get("upload_time", datetime.utcnow())
+                        )
+                    else:
+                        mal_safe = LSTM_MAL_SAFE(
+                            session_id=session_id,
+                            file_path=result.get("file_path", ""),
+                            file_name=result.get("file_name", ""),
+                            file_size=result.get("file_size", 0),
+                            malicious_status="Safe",
+                            malicious_probability=mal_analysis.get("malicious_probability", 0.0),
+                            analysis_time=result.get("analysis_time", 0.0),
+                            upload_time=upload_info.get("upload_time", datetime.utcnow())
+                        )
                     db.add(mal_safe)
 
             # 안전한 파일 카운트 (취약하지도 않고 악성도 아닌 파일)
@@ -237,13 +360,19 @@ def save_analysis_results(session_id: str, results: List[Dict[str, Any]], upload
         # 세션 플래그: 분석 모드 및 실제 결과 기반
         vul_flag_value = (mode in ("both", "vul")) and (vulnerability_results > 0)
         mal_flag_value = (mode in ("both", "mal")) and (malicious_results > 0)
+        
+        # 모델 타입에 따른 분석 모델명 설정
+        if is_bert:
+            analysis_model_name = "Integrated BERT"
+        else:
+            analysis_model_name = "Integrated LSTM"
 
         log_record = main_log(
             session_id=session_id,
             upload_time=upload_info.get("upload_time", datetime.utcnow()),
             filename=upload_info.get("filename", ""),
             file_size=upload_info.get("file_size", 0),
-            analysis_model="Integrated LSTM",
+            analysis_model=analysis_model_name,
             analysis_duration=total_analysis_time,
             total_files=total_files,
             safe_files=safe_files,
@@ -251,6 +380,8 @@ def save_analysis_results(session_id: str, results: List[Dict[str, Any]], upload
             malicious_files=malicious_results,
             vul_flag=vul_flag_value,
             mal_flag=mal_flag_value,
+            is_bert=is_bert,
+            is_mal=(mode == "mal"),  # 악성코드만 분석하는 경우
             is_safe=is_safe
         )
         db.add(log_record)
@@ -304,6 +435,8 @@ def get_session_summary(session_id: str) -> Optional[Dict[str, Any]]:
             "malicious_files": int(log_record.malicious_files) if log_record.malicious_files else 0,
             "vul_flag": bool(log_record.vul_flag) if log_record.vul_flag is not None else False,
             "mal_flag": bool(log_record.mal_flag) if log_record.mal_flag is not None else False,
+            "is_bert": bool(log_record.is_bert) if log_record.is_bert is not None else False,
+            "is_mal": bool(log_record.is_mal) if log_record.is_mal is not None else False,
             "is_safe": bool(log_record.is_safe) if log_record.is_safe is not None else True,
             "vulnerability_results": [
                 {
@@ -421,6 +554,8 @@ def get_recent_sessions(limit: int = 10) -> List[Dict[str, Any]]:
                 "malicious_files": session.malicious_files,
                 "vul_flag": session.vul_flag,
                 "mal_flag": session.mal_flag,
+                "is_bert": session.is_bert,
+                "is_mal": session.is_mal,
                 "is_safe": session.is_safe,
                 "created_at": session.created_at
             }

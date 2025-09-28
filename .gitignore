@@ -108,3 +108,5 @@ codebert_mal/source/**
 #safepy_3/result/
 #safepy_3_malicious/result/
 #codebert_mal/log/
+server/models/bert_mal/codebert/model.safetensors
+server/models/bert_vul/codebert/model.safetensors

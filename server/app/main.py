@@ -38,6 +38,7 @@ from datetime import datetime
 # 내부 모듈 import
 from database.database import init_database, save_analysis_results, get_session_summary, get_stats, get_recent_sessions
 from analysis.integrated_lstm_analyzer import IntegratedLSTMAnalyzer
+from analysis.bert_analyzer import BERTAnalyzer
 from app.services.file_service import FileService
 from config import UPLOAD_DIR, MAX_FILE_SIZE, ALLOWED_EXTENSIONS
 
@@ -76,6 +77,9 @@ file_service = FileService()
 models_dir = str((Path(__file__).parents[1] / "models").resolve())
 integrated_analyzer = IntegratedLSTMAnalyzer(models_dir)
 
+# BERT 분석기 초기화
+bert_analyzer = BERTAnalyzer(models_dir)
+
 @app.on_event("startup")
 async def startup_event():
     """Initialize services on startup"""
@@ -89,6 +93,8 @@ async def shutdown_event():
     print("Shutting down Python Security Analysis System...")
     if integrated_analyzer:
         integrated_analyzer.shutdown_executor()
+    if bert_analyzer:
+        bert_analyzer.shutdown_executor()
     print("Shutdown complete")
 
 # =============================================================================
@@ -349,6 +355,123 @@ async def upload_file_lstm_vulnerability(
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
+@app.post("/api/v1/upload/bert")
+async def upload_file_bert_both(
+    file: UploadFile = File(...)
+):
+    """Upload ZIP file for BERT analysis (both vulnerability and malicious)"""
+    try:
+        # Validate file
+        if not file.filename:
+            raise HTTPException(status_code=400, detail="No filename provided")
+        
+        file_extension = Path(file.filename).suffix.lower()
+        if file_extension not in ALLOWED_EXTENSIONS:
+            raise HTTPException(status_code=400, detail="Only ZIP files are allowed")
+        
+        # Check file size
+        file_content = await file.read()
+        if len(file_content) > MAX_FILE_SIZE:
+            raise HTTPException(status_code=400, detail="File too large")
+        
+        # Generate session ID
+        session_id = str(uuid.uuid4())
+        
+        # Save file
+        file_path = file_service.save_uploaded_file(file_content, session_id, file.filename)
+        
+        # Start BERT analysis in background (both mode)
+        asyncio.create_task(analyze_file_bert_async(session_id, str(file_path), file.filename, len(file_content), "both"))
+        
+        return JSONResponse({
+            "session_id": session_id,
+            "filename": file.filename,
+            "status": "uploaded",
+            "mode": "both",
+            "message": "File uploaded successfully. BERT analysis (both vulnerability and malicious) started."
+        })
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/api/v1/upload/bert/mal")
+async def upload_file_bert_malicious(
+    file: UploadFile = File(...)
+):
+    """Upload ZIP file for BERT malicious code analysis only"""
+    try:
+        # Validate file
+        if not file.filename:
+            raise HTTPException(status_code=400, detail="No filename provided")
+        
+        file_extension = Path(file.filename).suffix.lower()
+        if file_extension not in ALLOWED_EXTENSIONS:
+            raise HTTPException(status_code=400, detail="Only ZIP files are allowed")
+        
+        # Check file size
+        file_content = await file.read()
+        if len(file_content) > MAX_FILE_SIZE:
+            raise HTTPException(status_code=400, detail="File too large")
+        
+        # Generate session ID
+        session_id = str(uuid.uuid4())
+        
+        # Save file
+        file_path = file_service.save_uploaded_file(file_content, session_id, file.filename)
+        
+        # Start BERT analysis in background (malicious only)
+        asyncio.create_task(analyze_file_bert_async(session_id, str(file_path), file.filename, len(file_content), "mal"))
+        
+        return JSONResponse({
+            "session_id": session_id,
+            "filename": file.filename,
+            "status": "uploaded",
+            "mode": "malicious",
+            "message": "File uploaded successfully. BERT malicious code analysis started."
+        })
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/api/v1/upload/bert/vul")
+async def upload_file_bert_vulnerability(
+    file: UploadFile = File(...)
+):
+    """Upload ZIP file for BERT vulnerability analysis only"""
+    try:
+        # Validate file
+        if not file.filename:
+            raise HTTPException(status_code=400, detail="No filename provided")
+        
+        file_extension = Path(file.filename).suffix.lower()
+        if file_extension not in ALLOWED_EXTENSIONS:
+            raise HTTPException(status_code=400, detail="Only ZIP files are allowed")
+        
+        # Check file size
+        file_content = await file.read()
+        if len(file_content) > MAX_FILE_SIZE:
+            raise HTTPException(status_code=400, detail="File too large")
+        
+        # Generate session ID
+        session_id = str(uuid.uuid4())
+        
+        # Save file
+        file_path = file_service.save_uploaded_file(file_content, session_id, file.filename)
+        
+        # Start BERT analysis in background (vulnerability only)
+        asyncio.create_task(analyze_file_bert_async(session_id, str(file_path), file.filename, len(file_content), "vul"))
+        
+        return JSONResponse({
+            "session_id": session_id,
+            "filename": file.filename,
+            "status": "uploaded",
+            "mode": "vulnerability",
+            "message": "File uploaded successfully. BERT vulnerability analysis started."
+        })
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
 async def analyze_file_integrated_async(session_id: str, file_path: str, filename: str, file_size: int, mode: str = "both"):
     """통합 다중 프로세스 백그라운드 분석 작업 - ZIP → .py 추출 → 병렬 분석 → DB 저장
     
@@ -375,7 +498,7 @@ async def analyze_file_integrated_async(session_id: str, file_path: str, filenam
                 "filename": filename,
                 "file_size": file_size
             }
-            save_analysis_results(session_id, [], upload_info, mode)
+            save_analysis_results(session_id, [], upload_info, mode, is_bert=False)
             return
         
         # 2. 통합 다중 프로세스 분석 실행 (3개 프로세스 제한)
@@ -394,7 +517,8 @@ async def analyze_file_integrated_async(session_id: str, file_path: str, filenam
                 session_id, 
                 analysis_result["results"], 
                 upload_info,
-                mode
+                mode,
+                is_bert=False  # LSTM 분석
             )
             
             print(f"✅ Integrated analysis completed for session {session_id}")
@@ -408,6 +532,70 @@ async def analyze_file_integrated_async(session_id: str, file_path: str, filenam
         
     except Exception as e:
         print(f"❌ Integrated analysis failed for session {session_id}: {e}")
+        import traceback
+        traceback.print_exc()
+        print(f"🔄 Server continues running despite analysis error...")
+
+async def analyze_file_bert_async(session_id: str, file_path: str, filename: str, file_size: int, mode: str = "both"):
+    """BERT 백그라운드 분석 작업 - ZIP → .py 추출 → BERT 분석 → DB 저장
+    
+    Args:
+        session_id: 세션 ID
+        file_path: 파일 경로
+        filename: 파일명
+        file_size: 파일 크기
+        mode: 'both' | 'mal' | 'vul'
+    """
+    try:
+        print(f"🚀 Starting BERT analysis for session {session_id}")
+        print(f"📦 Processing ZIP file: {filename} ({file_size} bytes)")
+        
+        # 1. ZIP 파일에서 Python 파일들만 추출 (.py 확장자만, 나머지 파일 제거)
+        extracted_files = await file_service.extract_zip_file(file_path)
+        print(f"📁 Extracted {len(extracted_files)} Python files from {filename} (non-Python files filtered out)")
+        
+        if not extracted_files:
+            print(f"⚠️ No Python files found in {filename}")
+            # 빈 결과로 main_log에 기록
+            upload_info = {
+                "upload_time": datetime.now(),
+                "filename": filename,
+                "file_size": file_size
+            }
+            save_analysis_results(session_id, [], upload_info, mode, is_bert=True)
+            return
+        
+        # 2. BERT 분석 실행
+        print(f"🔍 Starting BERT analysis for {len(extracted_files)} files (mode: {mode})")
+        analysis_result = await bert_analyzer.analyze_files_multiprocess(session_id, extracted_files, mode)
+        
+        if analysis_result["status"] == "completed":
+            # 3. 결과를 BERT DB 테이블에 저장
+            upload_info = {
+                "upload_time": datetime.now(),
+                "filename": filename,
+                "file_size": file_size
+            }
+            
+            save_result = save_analysis_results(
+                session_id, 
+                analysis_result["results"], 
+                upload_info,
+                mode,
+                is_bert=True
+            )
+            
+            print(f"✅ BERT analysis completed for session {session_id}")
+            print(f"📊 Results: {save_result['vulnerability_results']} vulnerable, {save_result['malicious_results']} malicious, {save_result['safe_files']} safe")
+            print(f"⏱️ Total analysis time: {save_result['total_analysis_time']:.2f} seconds")
+            print(f"💾 Results saved to: BERT_VUL, BERT_MAL, main_log tables")
+            print(f"🔄 Server continues running for next analysis...")
+            
+        else:
+            print(f"❌ BERT analysis failed for session {session_id}: {analysis_result.get('error', 'Unknown error')}")
+        
+    except Exception as e:
+        print(f"❌ BERT analysis failed for session {session_id}: {e}")
         import traceback
         traceback.print_exc()
         print(f"🔄 Server continues running despite analysis error...")
@@ -671,7 +859,7 @@ async def health_check():
         "timestamp": datetime.now().isoformat(),
         "active_tasks": integrated_analyzer.get_active_tasks_count(),
         "message": "Server is running and ready for analysis"
-    }
+        }
 
 if __name__ == "__main__":
     import uvicorn

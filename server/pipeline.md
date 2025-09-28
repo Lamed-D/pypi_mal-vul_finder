@@ -41,8 +41,12 @@ server/
 │   │   ├── 📄 model_vul.pkl         # 취약점 탐지 모델
 │   │   ├── 📄 model_mal.pkl         # 악성코드 탐지 모델
 │   │   └── 📄 label_encoder_*.pkl   # 라벨 인코더들
-│   └── 📁 w2v/                      # Word2Vec 모델
-│       └── 📄 word2vec_*.model      # 토큰 임베딩 모델
+│   ├── 📁 w2v/                      # Word2Vec 모델
+│   │   └── 📄 word2vec_*.model      # 토큰 임베딩 모델
+│   ├── 📁 bert_mal/                 # BERT 악성코드 모델
+│   │   └── 📁 codebert/             # CodeBERT 모델 파일들
+│   └── 📁 bert_vul/                 # BERT 취약점 모델
+│       └── 📁 codebert/             # CodeBERT 모델 파일들
 ├── 📁 uploads/                      # 업로드된 파일 저장소
 │   └── 📁 {session_id}/             # 세션별 디렉토리
 │       └── 📁 extracted/            # 압축 해제된 Python 파일들
@@ -110,11 +114,18 @@ ZIP 압축 해제 → Python 파일 추출 → 파일 내용 읽기 → 메모�
 
 ### REST API
 
-#### 파일 업로드 (분석 모드별)
+#### 파일 업로드 (모델별, 분석 모드별)
 - `POST /api/v1/upload` - 파일 업로드 (기본: 취약점 + 악성코드 분석)
+
+**LSTM 모델:**
 - `POST /api/v1/upload/lstm` - LSTM 통합 분석 (취약점 + 악성코드)
 - `POST /api/v1/upload/lstm/mal` - LSTM 악성코드 분석만
 - `POST /api/v1/upload/lstm/vul` - LSTM 취약점 분석만
+
+**BERT 모델:**
+- `POST /api/v1/upload/bert` - BERT 통합 분석 (취약점 + 악성코드)
+- `POST /api/v1/upload/bert/mal` - BERT 악성코드 분석만
+- `POST /api/v1/upload/bert/vul` - BERT 취약점 분석만
 
 #### 세션 및 결과 조회
 - `GET /api/v1/sessions` - 세션 목록
@@ -129,14 +140,19 @@ ZIP 압축 해제 → Python 파일 추출 → 파일 내용 읽기 → 메모�
 - 세션별 분석 요약 정보
 - 업로드 시간, 파일명, 분석 결과 통계
 - vul_flag, mal_flag 플래그로 결과 존재 여부 표시 (버튼 렌더링에 사용)
+- is_bert, is_mal 플래그로 모델 타입 및 분석 타입 구분
 
-### lstm_vul 테이블
-- 취약점 분석 결과 상세 정보
-- 파일별 취약점 확률, CWE 라벨, 분석 시간
+### LSTM 테이블
+- **lstm_vul**: LSTM 취약점 분석 결과 상세 정보
+- **lstm_mal**: LSTM 악성코드 분석 결과 상세 정보
+- **lstm_vul_safe**: LSTM 취약점 관점 안전한 파일
+- **lstm_mal_safe**: LSTM 악성코드 관점 안전한 파일
 
-### lstm_mal 테이블
-- 악성코드 분석 결과 상세 정보
-- 파일별 악성코드 확률, 라벨, 분석 시간
+### BERT 테이블
+- **bert_vul**: BERT 취약점 분석 결과 상세 정보
+- **bert_mal**: BERT 악성코드 분석 결과 상세 정보
+- **bert_vul_safe**: BERT 취약점 관점 안전한 파일
+- **bert_mal_safe**: BERT 악성코드 관점 안전한 파일
 
 ## 🚀 실행 방법
 

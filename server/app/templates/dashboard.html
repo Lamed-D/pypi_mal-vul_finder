@@ -112,6 +112,22 @@
                         <h5><i class="fas fa-upload"></i> Upload ZIP File for Analysis</h5>
                     </div>
                     <div class="card-body">
+                        <!-- Model Selection -->
+                        <div class="mb-3">
+                            <label class="form-label"><i class="fas fa-brain"></i> AI Model:</label>
+                            <div class="btn-group w-100" role="group" aria-label="Model selection">
+                                <input type="radio" class="btn-check" name="modelType" id="modelLSTM" value="lstm" checked>
+                                <label class="btn btn-outline-info" for="modelLSTM">
+                                    <i class="fas fa-network-wired"></i> LSTM
+                                </label>
+
+                                <input type="radio" class="btn-check" name="modelType" id="modelBERT" value="bert">
+                                <label class="btn btn-outline-success" for="modelBERT">
+                                    <i class="fas fa-robot"></i> BERT
+                                </label>
+                            </div>
+                        </div>
+                        
                         <!-- Analysis Mode Selection -->
                         <div class="mb-3">
                             <label class="form-label"><i class="fas fa-cogs"></i> Analysis Mode:</label>
@@ -169,6 +185,11 @@
                                             <span class="badge bg-{{ 'success' if session.is_safe else 'danger' }}">
                                                 {{ 'Safe' if session.is_safe else 'Unsafe' }}
                                             </span>
+                                            {% if session.is_bert %}
+                                            <span class="badge bg-success">BERT</span>
+                                            {% else %}
+                                            <span class="badge bg-info">LSTM</span>
+                                            {% endif %}
                                         </small>
                                     </div>
                                     <div class="btn-group" role="group">
@@ -281,20 +302,35 @@
             uploadStatus.textContent = 'Uploading...';
 
             try {
-                // 선택된 분석 모드에 따라 API 엔드포인트 결정
+                // 선택된 모델과 분석 모드에 따라 API 엔드포인트 결정
+                const selectedModel = document.querySelector('input[name="modelType"]:checked').value;
                 const selectedMode = document.querySelector('input[name="analysisMode"]:checked').value;
                 let apiEndpoint = '/api/v1/upload'; // 기본값
                 
-                switch(selectedMode) {
-                    case 'both':
-                        apiEndpoint = '/api/v1/upload/lstm';
-                        break;
-                    case 'mal':
-                        apiEndpoint = '/api/v1/upload/lstm/mal';
-                        break;
-                    case 'vul':
-                        apiEndpoint = '/api/v1/upload/lstm/vul';
-                        break;
+                if (selectedModel === 'lstm') {
+                    switch(selectedMode) {
+                        case 'both':
+                            apiEndpoint = '/api/v1/upload/lstm';
+                            break;
+                        case 'mal':
+                            apiEndpoint = '/api/v1/upload/lstm/mal';
+                            break;
+                        case 'vul':
+                            apiEndpoint = '/api/v1/upload/lstm/vul';
+                            break;
+                    }
+                } else if (selectedModel === 'bert') {
+                    switch(selectedMode) {
+                        case 'both':
+                            apiEndpoint = '/api/v1/upload/bert';
+                            break;
+                        case 'mal':
+                            apiEndpoint = '/api/v1/upload/bert/mal';
+                            break;
+                        case 'vul':
+                            apiEndpoint = '/api/v1/upload/bert/vul';
+                            break;
+                    }
                 }
                 
                 const response = await fetch(apiEndpoint, {
@@ -305,12 +341,16 @@
                 const result = await response.json();
 
                 if (response.ok) {
+                    const modelText = {
+                        'lstm': 'LSTM',
+                        'bert': 'BERT'
+                    };
                     const modeText = {
                         'both': 'Vulnerability + Malicious analysis',
                         'mal': 'Malicious code analysis',
                         'vul': 'Vulnerability analysis'
                     };
-                    uploadStatus.textContent = `Upload successful! ${modeText[selectedMode]} started...`;
+                    uploadStatus.textContent = `Upload successful! ${modelText[selectedModel]} ${modeText[selectedMode]} started...`;
                     uploadProgress.querySelector('.progress-bar').style.width = '100%';
                     
                     // Refresh the page after a short delay
