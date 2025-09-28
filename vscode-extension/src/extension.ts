@@ -67,15 +67,28 @@ async function createPythonOnlyZipFromFolder(folderPath: string): Promise<string
 async function uploadZipToPythonServer(zipPath: string, analysisType: 'integrated' | 'vulnerability' | 'malicious' = 'integrated'): Promise<{session_id: string, dashboard_url: string}> {
   const form = new FormData();
   form.append('file', fs.createReadStream(zipPath), path.basename(zipPath));
-  form.append('analysis_type', analysisType);
   
-  const response = await axios.post('http://127.0.0.1:8000/upload', form, {
+  // 새로운 API 엔드포인트에 맞게 URL 설정
+  let apiUrl = 'http://127.0.0.1:8000/api/v1/upload/lstm'; // 기본: both (취약점 + 악성코드)
+  
+  if (analysisType === 'vulnerability') {
+    apiUrl = 'http://127.0.0.1:8000/api/v1/upload/lstm/vul';
+  } else if (analysisType === 'malicious') {
+    apiUrl = 'http://127.0.0.1:8000/api/v1/upload/lstm/mal';
+  }
+  
+  const response = await axios.post(apiUrl, form, {
     headers: form.getHeaders(),
     maxContentLength: Infinity,
     maxBodyLength: Infinity,
     timeout: 30000 // 30초 타임아웃
   });
-  return response.data;
+  
+  // 응답에서 dashboard_url 생성
+  const result = response.data;
+  result.dashboard_url = `http://127.0.0.1:8000/session/${result.session_id}`;
+  
+  return result;
 }
 
 async function getPythonSitePackagesPath(): Promise<string> {
@@ -273,15 +286,12 @@ export function activate(context: vscode.ExtensionContext) {
       const result = await uploadZipToPythonServer(zipPath, analysisType);
       
       const analysisTypeText = {
-        'integrated': '통합',
+        'integrated': '통합 (취약점 + 악성코드)',
         'vulnerability': '취약점',
-        'malicious': '악성'
+        'malicious': '악성코드'
       }[analysisType];
       
-      const queuePosition = result.queue_position || 0;
-      const statusMessage = queuePosition > 0 
-        ? `${analysisTypeText} 분석이 대기열에 추가되었습니다! (대기 순서: ${queuePosition}번째)`
-        : `${analysisTypeText} 분석이 시작되었습니다!`;
+      const statusMessage = `${analysisTypeText} 분석이 시작되었습니다!`;
       
       vscode.window.showInformationMessage(
         `${statusMessage} 세션 ID: ${result.session_id}`,

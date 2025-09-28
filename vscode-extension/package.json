@@ -10,6 +10,13 @@
   "categories": [
     "Other"
   ],
+  "keywords": [
+    "python",
+    "security",
+    "analysis",
+    "vulnerability",
+    "malware"
+  ],
   "activationEvents": [
     "onStartupFinished"
   ],
@@ -18,29 +25,60 @@
     "commands": [
       {
         "command": "vscode-extension.uploadZipToLocal",
-        "title": "Python Security: Analyze Project (Integrated)"
+        "title": "Python Security: 프로젝트 분석 (통합 - 취약점 + 악성코드)",
+        "category": "Python Security"
       },
       {
         "command": "vscode-extension.extractPythonPackages",
-        "title": "Python Security: Analyze Installed Packages (Integrated)"
+        "title": "Python Security: 설치된 패키지 분석 (통합 - 취약점 + 악성코드)",
+        "category": "Python Security"
       },
       {
         "command": "vscode-extension.analyzeProjectVulnerability",
-        "title": "Python Security: Analyze Project (Vulnerability Only)"
+        "title": "Python Security: 프로젝트 분석 (취약점만)",
+        "category": "Python Security"
       },
       {
         "command": "vscode-extension.analyzeProjectMalicious",
-        "title": "Python Security: Analyze Project (Malicious Only)"
+        "title": "Python Security: 프로젝트 분석 (악성코드만)",
+        "category": "Python Security"
       },
       {
         "command": "vscode-extension.analyzePackagesVulnerability",
-        "title": "Python Security: Analyze Installed Packages (Vulnerability Only)"
+        "title": "Python Security: 설치된 패키지 분석 (취약점만)",
+        "category": "Python Security"
       },
       {
         "command": "vscode-extension.analyzePackagesMalicious",
-        "title": "Python Security: Analyze Installed Packages (Malicious Only)"
+        "title": "Python Security: 설치된 패키지 분석 (악성코드만)",
+        "category": "Python Security"
       }
-    ]
+    ],
+    "menus": {
+      "commandPalette": [
+        {
+          "command": "vscode-extension.uploadZipToLocal",
+          "when": "workspaceFolderCount > 0"
+        },
+        {
+          "command": "vscode-extension.extractPythonPackages"
+        },
+        {
+          "command": "vscode-extension.analyzeProjectVulnerability",
+          "when": "workspaceFolderCount > 0"
+        },
+        {
+          "command": "vscode-extension.analyzeProjectMalicious",
+          "when": "workspaceFolderCount > 0"
+        },
+        {
+          "command": "vscode-extension.analyzePackagesVulnerability"
+        },
+        {
+          "command": "vscode-extension.analyzePackagesMalicious"
+        }
+      ]
+    }
   },
   "scripts": {
     "compile": "tsc -p ./",
