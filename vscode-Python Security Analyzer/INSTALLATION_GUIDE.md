@@ -35,8 +35,8 @@
 
 ### 1단계: 프로젝트 클론 및 이동
 ```powershell
-# 프로젝트 루트 폴더로 이동
-cd C:\Users\Lamed\Documents\GitHub\pypi_mal-vul_finder
+# 프로젝트 루트 폴더로 이동 (사용자 계정명에 맞게 경로 변경)
+cd C:\Users\<USER>\Documents\GitHub\pypi_mal-vul_finder
 ```
 
 ### 2단계: VS Code 확장 의존성 설치
@@ -72,7 +72,7 @@ uvicorn app.main:app --host 127.0.0.1 --port 8000 --reload
 ```
 
 ### 5단계: VS Code 확장 실행
-1. VS Code에서 `vscode-extension` 폴더 열기
+1. VS Code에서 `vscode-Python Security Analyzer` (또는 `vscode-extension`) 폴더 열기
 2. `F5` 키를 눌러 Extension Development Host 실행
 3. 새 창에서 명령 팔레트 (`Ctrl+Shift+P`) 열기
 4. "Python Security" 명령어들 사용
@@ -127,9 +127,11 @@ pypi_mal-vul_finder/
 
 ## 🌐 API 엔드포인트
 - **서버 주소**: `http://127.0.0.1:8000`
-- **업로드 엔드포인트**: `POST /upload`
-- **대시보드**: `http://127.0.0.1:8000/dashboard`
-- **분석 결과**: `http://127.0.0.1:8000/sessions/{session_id}`
+- **업로드 엔드포인트 (확장 기본값)**:
+  - 통합: `POST /api/v1/upload/lstm`
+  - 취약점 전용: `POST /api/v1/upload/lstm/vul`
+  - 악성코드 전용: `POST /api/v1/upload/lstm/mal`
+- **세션 대시보드**: `http://127.0.0.1:8000/session/{session_id}`
 
 ## 🐛 문제 해결
 
@@ -144,12 +146,24 @@ pypi_mal-vul_finder/
    ```
 
 ### VS Code 확장이 작동하지 않는 경우
-1. TypeScript 컴파일 확인:
+1. "Activating extension ... failed: Cannot find module .../out/extension.js" 오류가 뜨는 경우:
+   ```powershell
+   # PowerShell에서 빌드 (out/extension.js 생성)
+   cd .\vscode-Python Security Analyzer
+   npm install
+   npm run build
+
+   cd ..\vscode-extension
+   npm install
+   npm run build
+   ```
+   - 이후 VS Code에서 `Ctrl+Shift+P` → "Developer: Reload Window" 실행
+2. TypeScript 컴파일 수동 확인:
    ```powershell
    cd vscode-extension
    npm run compile
    ```
-2. Extension Development Host 창에서 개발자 도구 확인:
+3. Extension Development Host 창에서 개발자 도구 확인:
    - `Help` → `Toggle Developer Tools`
 
 ### 의존성 설치 오류
