@@ -344,14 +344,22 @@ def save_analysis_results(session_id: str, results: List[Dict[str, Any]], upload
                         )
                     db.add(mal_safe)
 
-            # 안전한 파일 카운트 (취약하지도 않고 악성도 아닌 파일)
+            # 안전한 파일 카운트 (분석 모드에 따라 다르게 계산)
             vul_analysis = result.get("vulnerability_analysis", {})
             mal_analysis = result.get("malicious_analysis", {})
             is_vulnerable = bool(vul_analysis.get("is_vulnerable", False))
             is_malicious = bool(mal_analysis.get("is_malicious", False))
             
-            if not is_vulnerable and not is_malicious:
-                safe_files += 1
+            # 분석 모드에 따른 안전한 파일 카운트
+            if mode == "mal":  # 악성코드만 분석
+                if not is_malicious:
+                    safe_files += 1
+            elif mode == "vul":  # 취약점만 분석
+                if not is_vulnerable:
+                    safe_files += 1
+            else:  # both 모드
+                if not is_vulnerable and not is_malicious:
+                    safe_files += 1
         
         # main_log에 요약 저장
         total_files = len(results)
@@ -434,6 +442,20 @@ def get_session_summary(session_id: str) -> Optional[Dict[str, Any]]:
             mal_records = db.query(LSTM_MAL).filter(LSTM_MAL.session_id == session_id).all()
             mal_safe_records = db.query(LSTM_MAL_SAFE).filter(LSTM_MAL_SAFE.session_id == session_id).all()
         
+        # 분석 모드에 따른 안전한 파일 개수 계산
+        if is_bert_analysis:
+            # BERT 분석에서는 분석 모드에 따라 개별 계산
+            if log_record.is_mal:  # 악성코드만 분석한 경우
+                unique_safe_files = len(mal_safe_records)
+            else:  # 취약점만 분석하거나 둘 다 분석한 경우
+                unique_safe_files = len(vul_safe_records)
+        else:
+            # LSTM 분석에서는 분석 모드에 따라 개별 계산
+            if log_record.is_mal:  # 악성코드만 분석한 경우
+                unique_safe_files = len(mal_safe_records)
+            else:  # 취약점만 분석하거나 둘 다 분석한 경우
+                unique_safe_files = len(vul_safe_records)
+
         return {
             "session_id": session_id,
             "upload_time": log_record.upload_time.isoformat() if log_record.upload_time else None,
@@ -442,7 +464,7 @@ def get_session_summary(session_id: str) -> Optional[Dict[str, Any]]:
             "analysis_model": log_record.analysis_model,
             "analysis_duration": float(log_record.analysis_duration) if log_record.analysis_duration else 0.0,
             "total_files": int(log_record.total_files) if log_record.total_files else 0,
-            "safe_files": int(log_record.safe_files) if log_record.safe_files else 0,
+            "safe_files": unique_safe_files,  # 분석 모드에 따른 안전한 파일 개수
             "vulnerable_files": int(log_record.vulnerable_files) if log_record.vulnerable_files else 0,
             "malicious_files": int(log_record.malicious_files) if log_record.malicious_files else 0,
             "vul_flag": bool(log_record.vul_flag) if log_record.vul_flag is not None else False,

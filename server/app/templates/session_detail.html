@@ -227,7 +227,7 @@
                 <div class="stats-card safe text-center">
                     <i class="fas fa-shield-alt fa-3x mb-3"></i>
                     <h3>{{ session.safe_files }}</h3>
-                    <p class="mb-0">안전한 파일</p>
+                    <p class="mb-0">안전한 파일{% if session.is_mal %} (악성 관점){% else %} (취약 관점){% endif %}</p>
                 </div>
             </div>
             <div class="col-md-3">
@@ -298,11 +298,18 @@
                         </div>
                         {% if session.vulnerability_safe_results %}
                         <hr>
-                        <h6 class="mb-3"><i class="fas fa-shield-alt me-1 text-success"></i>안전한 파일 (취약 관점)</h6>
-                        <div class="row">
+                        <h6 class="mb-3">
+                            <i class="fas fa-shield-alt me-1 text-success"></i>안전한 파일 (취약 관점)
+                            <span class="badge bg-success ms-2">{{ session.vulnerability_safe_results|length }}개</span>
+                        </h6>
+                        <div class="row" id="vulnerability-safe-files">
                             {% for file in session.vulnerability_safe_results %}
-                            <div class="col-md-6 mb-3">
-                                <div class="card file-card safe">
+                            <div class="col-md-6 mb-3 safe-file-item" {% if loop.index > 8 %}style="display: none;"{% endif %}>
+                                <div class="card file-card safe" 
+                                     data-file-name="{{ file.file_name }}" 
+                                     data-file-path="{{ file.file_path | tojson }}" 
+                                     data-analysis-type="vulnerable_safe" 
+                                     data-analysis-data="{{ file | tojson }}">
                                     <div class="card-body">
                                         <div class="d-flex justify-content-between align-items-start mb-2">
                                             <h6 class="card-title mb-0">
@@ -314,11 +321,23 @@
                                         <div class="mt-2">
                                             <small class="text-muted">신뢰도: {{ "%.1f"|format(file.vulnerability_probability * 100) }}%</small>
                                         </div>
+                                        <div class="text-center mt-2">
+                                            <small class="text-muted">
+                                                <i class="fas fa-mouse-pointer me-1"></i>클릭하여 소스코드 보기
+                                            </small>
+                                        </div>
                                     </div>
                                 </div>
                             </div>
                             {% endfor %}
                         </div>
+                        {% if session.vulnerability_safe_results|length > 8 %}
+                        <div class="text-center mt-3">
+                            <button class="btn btn-outline-success" id="show-more-vulnerability-btn" onclick="toggleSafeFiles('vulnerability')">
+                                <i class="fas fa-eye me-1"></i>나머지 {{ session.vulnerability_safe_results|length - 8 }}개 파일 보기
+                            </button>
+                        </div>
+                        {% endif %}
                         {% endif %}
                     </div>
                 </div>
@@ -380,11 +399,18 @@
                         </div>
                         {% if session.malicious_safe_results %}
                         <hr>
-                        <h6 class="mb-3"><i class="fas fa-shield-alt me-1 text-success"></i>안전한 파일 (악성 관점)</h6>
-                        <div class="row">
+                        <h6 class="mb-3">
+                            <i class="fas fa-shield-alt me-1 text-success"></i>안전한 파일 (악성 관점)
+                            <span class="badge bg-success ms-2">{{ session.malicious_safe_results|length }}개</span>
+                        </h6>
+                        <div class="row" id="malicious-safe-files">
                             {% for file in session.malicious_safe_results %}
-                            <div class="col-md-6 mb-3">
-                                <div class="card file-card safe">
+                            <div class="col-md-6 mb-3 safe-file-item" {% if loop.index > 8 %}style="display: none;"{% endif %}>
+                                <div class="card file-card safe" 
+                                     data-file-name="{{ file.file_name }}" 
+                                     data-file-path="{{ file.file_path | tojson }}" 
+                                     data-analysis-type="malicious_safe" 
+                                     data-analysis-data="{{ file | tojson }}">
                                     <div class="card-body">
                                         <div class="d-flex justify-content-between align-items-start mb-2">
                                             <h6 class="card-title mb-0">
@@ -393,11 +419,23 @@
                                             <span class="badge bg-success">Safe</span>
                                         </div>
                                         <small class="text-muted">확률: {{ "%.1f"|format(file.malicious_probability * 100) }}%</small>
+                                        <div class="text-center mt-2">
+                                            <small class="text-muted">
+                                                <i class="fas fa-mouse-pointer me-1"></i>클릭하여 소스코드 보기
+                                            </small>
+                                        </div>
                                     </div>
                                 </div>
                             </div>
                             {% endfor %}
                         </div>
+                        {% if session.malicious_safe_results|length > 8 %}
+                        <div class="text-center mt-3">
+                            <button class="btn btn-outline-success" id="show-more-malicious-btn" onclick="toggleSafeFiles('malicious')">
+                                <i class="fas fa-eye me-1"></i>나머지 {{ session.malicious_safe_results|length - 8 }}개 파일 보기
+                            </button>
+                        </div>
+                        {% endif %}
                         {% endif %}
                     </div>
                 </div>
@@ -405,28 +443,11 @@
         </div>
         {% endif %}
 
-        <!-- 안전한 파일 정보 -->
-        {% if session.safe_files > 0 %}
-        <div class="row">
-            <div class="col-12">
-                <div class="card">
-                    <div class="card-header">
-                        <h5 class="mb-0">
-                            <i class="fas fa-shield-alt me-2"></i>안전한 파일 (main_log)
-                        </h5>
-                    </div>
-                    <div class="card-body">
-                        <div class="text-center py-5">
-                            <i class="fas fa-shield-alt text-success fa-4x mb-3"></i>
-                            <h4 class="text-success">{{ session.safe_files }}개의 파일이 안전합니다</h4>
-                            <p class="text-muted">취약점이나 악성 코드가 발견되지 않았습니다.</p>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </div>
-        {% endif %}
     </div>
+
+    <!-- 숨겨진 데이터 -->
+    <script type="application/json" id="vulnerability-safe-data">{{ session.vulnerability_safe_results | tojson }}</script>
+    <script type="application/json" id="malicious-safe-data">{{ session.malicious_safe_results | tojson }}</script>
 
     <!-- 소스코드 모달 -->
     <div class="modal fade code-modal" id="sourceCodeModal" tabindex="-1">
@@ -468,28 +489,27 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.24.1/components/prism-core.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.24.1/plugins/autoloader/prism-autoloader.min.js"></script>
     <script>
-        // 페이지 로드 시 이벤트 리스너 추가
+        // 페이지 로드 시 이벤트 리스너 추가 (이벤트 위임 사용)
         document.addEventListener('DOMContentLoaded', function() {
-            // 취약점 파일 카드 클릭 이벤트
-            document.querySelectorAll('.file-card.vulnerable').forEach(card => {
-                card.addEventListener('click', function() {
-                    const fileName = this.dataset.fileName;
-                    const filePath = JSON.parse(this.dataset.filePath);
-                    const analysisType = this.dataset.analysisType;
-                    const analysisData = JSON.parse(this.dataset.analysisData);
+            // 모든 파일 카드 클릭 이벤트 (이벤트 위임으로 동적 생성된 요소도 처리)
+            document.addEventListener('click', function(event) {
+                const card = event.target.closest('.file-card');
+                if (card) {
+                    const fileName = card.dataset.fileName;
+                    const filePath = JSON.parse(card.dataset.filePath);
+                    const analysisType = card.dataset.analysisType;
+                    const analysisData = JSON.parse(card.dataset.analysisData);
                     showSourceCode(fileName, filePath, analysisType, analysisData);
-                });
-            });
-            
-            // 악성코드 파일 카드 클릭 이벤트
-            document.querySelectorAll('.file-card.malicious').forEach(card => {
-                card.addEventListener('click', function() {
-                    const fileName = this.dataset.fileName;
-                    const filePath = JSON.parse(this.dataset.filePath);
-                    const analysisType = this.dataset.analysisType;
-                    const analysisData = JSON.parse(this.dataset.analysisData);
-                    showSourceCode(fileName, filePath, analysisType, analysisData);
-                });
+                }
+                
+                // 나머지 파일 보기 버튼 클릭 이벤트
+                if (event.target.matches('button[onclick*="toggleSafeFiles"]')) {
+                    const onclickAttr = event.target.getAttribute('onclick');
+                    const match = onclickAttr.match(/toggleSafeFiles\('(\w+)'\)/);
+                    if (match) {
+                        toggleSafeFiles(match[1], event.target);
+                    }
+                }
             });
         });
 
@@ -544,6 +564,25 @@
                             <p><strong>분석 시간:</strong> ${analysisData.analysis_time.toFixed(2)}초</p>
                         </div>
                     `;
+                } else if (type === 'vulnerable_safe') {
+                    analysisDetails.innerHTML = `
+                        <div class="alert alert-success">
+                            <h6><i class="fas fa-shield-alt me-1"></i>안전한 파일 (취약점 관점)</h6>
+                            <p><strong>상태:</strong> ${analysisData.vulnerability_status}</p>
+                            <p><strong>CWE 라벨:</strong> ${analysisData.cwe_label}</p>
+                            <p><strong>안전 확률:</strong> ${(analysisData.vulnerability_probability * 100).toFixed(1)}%</p>
+                            <p><strong>분석 시간:</strong> ${analysisData.analysis_time.toFixed(2)}초</p>
+                        </div>
+                    `;
+                } else if (type === 'malicious_safe') {
+                    analysisDetails.innerHTML = `
+                        <div class="alert alert-success">
+                            <h6><i class="fas fa-shield-alt me-1"></i>안전한 파일 (악성코드 관점)</h6>
+                            <p><strong>상태:</strong> ${analysisData.malicious_status}</p>
+                            <p><strong>안전 확률:</strong> ${(analysisData.malicious_probability * 100).toFixed(1)}%</p>
+                            <p><strong>분석 시간:</strong> ${analysisData.analysis_time.toFixed(2)}초</p>
+                        </div>
+                    `;
                 }
                 
                 // 모달 표시
@@ -556,6 +595,35 @@
             } catch (error) {
                 console.error('Error loading source code:', error);
                 alert('소스코드를 불러오는 중 오류가 발생했습니다.');
+            }
+        }
+
+        function toggleSafeFiles(type, buttonElement = null) {
+            const containerId = type === 'vulnerability' ? 'vulnerability-safe-files' : 'malicious-safe-files';
+            const container = document.getElementById(containerId);
+            const button = buttonElement || event.target;
+            
+            try {
+                const hiddenItems = container.querySelectorAll('.safe-file-item[style*="display: none"]');
+                const visibleItems = container.querySelectorAll('.safe-file-item:not([style*="display: none"])');
+                
+                if (hiddenItems.length > 0) {
+                    // 숨겨진 파일들 보이기
+                    hiddenItems.forEach(item => {
+                        item.style.display = '';
+                    });
+                    button.innerHTML = '<i class="fas fa-eye-slash me-1"></i>파일 숨기기';
+                } else {
+                    // 8개 이후 파일들 숨기기
+                    const allItems = container.querySelectorAll('.safe-file-item');
+                    for (let i = 8; i < allItems.length; i++) {
+                        allItems[i].style.display = 'none';
+                    }
+                    button.innerHTML = '<i class="fas fa-eye me-1"></i>나머지 파일 보기';
+                }
+                
+            } catch (error) {
+                console.error('Error toggling safe files:', error);
             }
         }
     </script>
