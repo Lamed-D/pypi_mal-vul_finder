@@ -1,13 +1,13 @@
 """
-Python Security Analysis System - 설정 파일
-===========================================
+PySecure - Python Security Analysis System - 설정 파일
+=====================================================
 
-이 모듈은 시스템의 모든 설정값을 중앙 집중식으로 관리합니다.
+이 모듈은 PySecure 시스템의 모든 설정값을 중앙 집중식으로 관리합니다.
 
 주요 설정 카테고리:
 - 데이터베이스 설정
 - 파일 업로드 설정
-- AI 분석 설정
+- AI 분석 설정 (LSTM, BERT, ML)
 - API 서버 설정
 - 보안 설정
 - 로깅 설정
@@ -69,6 +69,16 @@ LSTM_MODEL_PATH = MODEL_DIR / "lstm"
 # Word2Vec 모델 파일 경로
 W2V_MODEL_PATH = MODEL_DIR / "w2v" / "word2vec_withString10-6-100.model"
 
+# ML 통합 분석 설정
+# safepy_3_malicious_ML 모델 경로 (상위 디렉토리)
+ML_MODEL_DIR = BASE_DIR.parent / "safepy_3_malicious_ML"
+# XGBoost 모델 파일 경로
+XGBOOST_MODEL_PATH = ML_MODEL_DIR / "xgboost_model.pkl"
+# ML LSTM 모델 경로
+ML_LSTM_MODEL_PATH = ML_MODEL_DIR / "model" / "model_mal.pkl"
+# ML 라벨 인코더 경로
+ML_LABEL_ENCODER_PATH = ML_MODEL_DIR / "model" / "label_encoder_mal.pkl"
+
 # =============================================================================
 # API 서버 설정
 # =============================================================================
@@ -79,6 +89,10 @@ API_V1_PREFIX = "/api/v1"
 HOST = "127.0.0.1"
 # 서버 포트
 PORT = 8000
+# 서비스 이름
+SERVICE_NAME = "PySecure"
+# 서비스 버전
+SERVICE_VERSION = "2.0.0"
 
 # =============================================================================
 # 로깅 설정

@@ -1,12 +1,13 @@
 """
-Python Security Analysis System - 서버 실행 스크립트
-==================================================
+PySecure - Python Security Analysis System - 서버 실행 스크립트
+==============================================================
 
-이 모듈은 Python Security Analysis System의 메인 진입점입니다.
+이 모듈은 PySecure의 메인 진입점입니다.
 
 주요 기능:
 - 데이터베이스 초기화
 - Uvicorn ASGI 서버 시작
+- ML 모델 로딩
 - 개발 모드 자동 리로드
 
 실행 방법:
@@ -26,18 +27,19 @@ server_dir = Path(__file__).parent
 sys.path.insert(0, str(server_dir))
 
 # 설정 및 데이터베이스 모듈 import
-from config import HOST, PORT, LOG_LEVEL
+from config import HOST, PORT, LOG_LEVEL, SERVICE_NAME, SERVICE_VERSION
 from database.database import init_database
 
 def main():
     """
-    보안 분석 서버 시작
+    PySecure 보안 분석 서버 시작
     
     서버 시작 전에 데이터베이스를 초기화하고
     Uvicorn ASGI 서버를 시작합니다.
     """
     # 서버 시작 정보 출력
     print("=" * 60)
+    print(f"🚀 {SERVICE_NAME} v{SERVICE_VERSION}")
     print("Python Security Analysis System")
     print("=" * 60)
     print(f"Server starting on http://{HOST}:{PORT}")
@@ -45,9 +47,9 @@ def main():
     print("=" * 60)
     
     # 데이터베이스 초기화
-    print("Initializing database...")
+    print("📊 Initializing database...")
     init_database()
-    print("Database initialized successfully")
+    print("✅ Database initialized successfully")
     
     # Uvicorn ASGI 서버 시작
     uvicorn.run(

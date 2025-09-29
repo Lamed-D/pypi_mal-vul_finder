@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Python Security Analysis Dashboard</title>
+    <title>PySecure - Python Security Analysis Dashboard</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
@@ -65,7 +65,7 @@
     <nav class="navbar navbar-expand-lg navbar-dark bg-dark">
         <div class="container">
             <a class="navbar-brand" href="#">
-                <i class="fas fa-shield-alt"></i> Python Security Analysis
+                <i class="fas fa-shield-alt"></i> PySecure
             </a>
             <div class="navbar-nav ms-auto">
                 <span class="navbar-text">
@@ -125,11 +125,16 @@
                                 <label class="btn btn-outline-success" for="modelBERT">
                                     <i class="fas fa-robot"></i> BERT
                                 </label>
+
+                                <input type="radio" class="btn-check" name="modelType" id="modelML" value="ml">
+                                <label class="btn btn-outline-warning" for="modelML">
+                                    <i class="fas fa-brain"></i> ML (LSTM + XGBoost)
+                                </label>
                             </div>
                         </div>
                         
-                        <!-- Analysis Mode Selection -->
-                        <div class="mb-3">
+                        <!-- Analysis Mode Selection (ML 모델일 때는 숨김) -->
+                        <div class="mb-3" id="analysisModeSection">
                             <label class="form-label"><i class="fas fa-cogs"></i> Analysis Mode:</label>
                             <div class="btn-group w-100" role="group" aria-label="Analysis mode selection">
                                 <input type="radio" class="btn-check" name="analysisMode" id="modeBoth" value="both" checked>
@@ -185,7 +190,9 @@
                                             <span class="badge bg-{{ 'success' if session.is_safe else 'danger' }}">
                                                 {{ 'Safe' if session.is_safe else 'Unsafe' }}
                                             </span>
-                                            {% if session.is_bert %}
+                                            {% if session.is_ml %}
+                                            <span class="badge bg-warning">ML</span>
+                                            {% elif session.is_bert %}
                                             <span class="badge bg-success">BERT</span>
                                             {% else %}
                                             <span class="badge bg-info">LSTM</span>
@@ -193,6 +200,13 @@
                                         </small>
                                     </div>
                                     <div class="btn-group" role="group">
+                                        {% if session.is_ml %}
+                                        <!-- ML 분석인 경우 ML 버튼만 표시 -->
+                                        <a href="/session/{{ session.session_id }}/ML" class="btn btn-sm btn-outline-warning">
+                                            <i class="fas fa-brain"></i> ML 분석 결과
+                                        </a>
+                                        {% else %}
+                                        <!-- 일반 분석인 경우 기존 버튼들 표시 -->
                                         <button class="btn btn-sm btn-outline-primary" onclick="viewSession('{{ session.session_id }}')">
                                             <i class="fas fa-eye"></i> 전체
                                         </button>
@@ -205,6 +219,7 @@
                                         <a href="/session/{{ session.session_id }}/vulnerable" class="btn btn-sm btn-outline-warning">
                                             <i class="fas fa-exclamation-triangle"></i> 취약
                                         </a>
+                                        {% endif %}
                                         {% endif %}
                                     </div>
                                 </div>
@@ -289,6 +304,20 @@
             }
         });
 
+        // 모델 선택에 따른 Analysis Mode Section 표시/숨김
+        const modelInputs = document.querySelectorAll('input[name="modelType"]');
+        const analysisModeSection = document.getElementById('analysisModeSection');
+        
+        modelInputs.forEach(input => {
+            input.addEventListener('change', () => {
+                if (input.value === 'ml') {
+                    analysisModeSection.style.display = 'none';
+                } else {
+                    analysisModeSection.style.display = 'block';
+                }
+            });
+        });
+
         async function handleFileUpload(file) {
             if (!file.name.endsWith('.zip')) {
                 alert('Please upload a ZIP file');
@@ -331,6 +360,9 @@
                             apiEndpoint = '/api/v1/upload/bert/vul';
                             break;
                     }
+                } else if (selectedModel === 'ml') {
+                    // ML 분석은 항상 통합 분석이므로 모드 무시
+                    apiEndpoint = '/api/v1/upload/ML';
                 }
                 
                 const response = await fetch(apiEndpoint, {
@@ -343,14 +375,34 @@
                 if (response.ok) {
                     const modelText = {
                         'lstm': 'LSTM',
-                        'bert': 'BERT'
+                        'bert': 'BERT',
+                        'ml': 'ML (LSTM + XGBoost)'
                     };
                     const modeText = {
                         'both': 'Vulnerability + Malicious analysis',
                         'mal': 'Malicious code analysis',
                         'vul': 'Vulnerability analysis'
                     };
-                    uploadStatus.textContent = `Upload successful! ${modelText[selectedModel]} ${modeText[selectedMode]} started...`;
+                    
+                    if (selectedModel === 'ml') {
+                        uploadStatus.innerHTML = `
+                            <div class="alert alert-success">
+                                <h6><i class="fas fa-check-circle"></i> ML Analysis Complete!</h6>
+                                <p><strong>Model:</strong> ${modelText[selectedModel]}</p>
+                                <p><strong>Session ID:</strong> ${result.session_id}</p>
+                                <p><strong>Packages Analyzed:</strong> ${result.total_packages}</p>
+                                <p><strong>Analysis Time:</strong> ${result.analysis_time.toFixed(2)}s</p>
+                                <div class="mt-2">
+                                    <button class="btn btn-sm btn-primary" onclick="window.open('/session/${result.session_id}/ML', '_blank')">
+                                        <i class="fas fa-external-link-alt"></i> View ML Analysis
+                                    </button>
+                                </div>
+                            </div>
+                        `;
+                    } else {
+                        uploadStatus.textContent = `Upload successful! ${modelText[selectedModel]} ${modeText[selectedMode]} started...`;
+                    }
+                    
                     uploadProgress.querySelector('.progress-bar').style.width = '100%';
                     
                     // Refresh the page after a short delay
@@ -453,5 +505,12 @@
             }
         });
     </script>
+
+    <!-- Footer -->
+    <footer class="bg-dark text-light py-4 mt-5">
+        <div class="container text-center">
+            <p class="mb-0">&copy; 2024 PySecure - Python Security Analysis System. All rights reserved.</p>
+        </div>
+    </footer>
 </body>
 </html>

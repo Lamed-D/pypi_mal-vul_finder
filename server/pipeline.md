@@ -1,21 +1,35 @@
-# Python Security Analysis System - Pipeline 문서
+# PySecure - Python Security Analysis System - Pipeline 문서
 
 ## 📋 시스템 개요
 
-Python Security Analysis System은 ZIP 파일로 업로드된 Python 코드를 AI 기반으로 분석하여 취약점과 악성코드를 탐지하는 웹 애플리케이션입니다.
+PySecure는 ZIP 파일로 업로드된 Python 코드를 AI 기반으로 분석하여 취약점과 악성코드를 탐지하는 웹 애플리케이션입니다. LSTM, BERT, XGBoost 등 다양한 머신러닝 모델을 통합하여 고도화된 보안 분석을 제공합니다.
 
 ## 🏗️ 시스템 아키텍처
 
 ```
 ┌─────────────────┐    ┌─────────────────┐    ┌─────────────────┐
 │   웹 인터페이스    │    │   FastAPI 서버   │    │   AI 분석 엔진   │
-│   (HTML/CSS/JS) │◄──►│   (REST API)    │◄──►│   (LSTM 모델)   │
+│   (HTML/CSS/JS) │◄──►│   (PySecure)    │◄──►│   (LSTM/BERT/ML)│
 └─────────────────┘    └─────────────────┘    └─────────────────┘
                               │
                               ▼
                        ┌─────────────────┐
                        │   SQLite DB     │
                        │   (분석 결과)     │
+                       └─────────────────┘
+```
+
+### ML 통합 아키텍처
+```
+┌─────────────────┐    ┌─────────────────┐    ┌─────────────────┐
+│   ML 분석 요청    │    │   ML 패키지 분석기 │    │   safepy_3_ML   │
+│   (ZIP 업로드)   │◄──►│   (LSTM+XGBoost)│◄──►│   (모델 파일)    │
+└─────────────────┘    └─────────────────┘    └─────────────────┘
+                              │
+                              ▼
+                       ┌─────────────────┐
+                       │   pkg_vul_analysis│
+                       │   (패키지 분석 결과)│
                        └─────────────────┘
 ```
 
@@ -31,9 +45,11 @@ server/
 │       ├── 📄 dashboard.html        # 대시보드 페이지
 │       ├── 📄 vulnerable_view.html  # 취약점 분석 결과 페이지
 │       ├── 📄 malicious_view.html   # 악성코드 분석 결과 페이지
+│       ├── 📄 ml_analysis_view.html # ML 패키지 분석 결과 페이지
 │       └── 📄 session_detail.html   # 세션 상세 페이지
 ├── 📁 analysis/                     # AI 분석 엔진
-│   └── 📄 integrated_lstm_analyzer.py # 통합 LSTM 분석기
+│   ├── 📄 integrated_lstm_analyzer.py # 통합 LSTM 분석기
+│   └── 📄 ml_package_analyzer.py    # ML 패키지 분석기 (LSTM + XGBoost)
 ├── 📁 database/                     # 데이터베이스
 │   └── 📄 database.py               # DB 스키마 및 CRUD 작업
 ├── 📁 models/                       # AI 모델 파일
@@ -54,7 +70,8 @@ server/
 ├── 📄 run.py                        # 서버 실행 스크립트
 ├── 📄 requirements.txt              # Python 의존성
 ├── 📄 main.db                       # SQLite 데이터베이스
-└── 📄 pipeline.md                   # 이 문서
+├── 📄 pipeline.md                   # 이 문서
+└── 📄 ML_INTEGRATION_README.md      # ML 통합 가이드
 ```
 
 ## 🔄 데이터 파이프라인
@@ -79,6 +96,11 @@ ZIP 압축 해제 → Python 파일 추출 → 파일 내용 읽기 → 메모�
 분석 결과 → 데이터베이스 저장 → 웹 인터페이스 표시
 ```
 
+### 5. ML 패키지 분석 단계 (신규)
+```
+ZIP 업로드 → 패키지 추출 → 메타데이터 파싱 → LSTM 분석 → XGBoost 예측 → 통합 결과 생성 → DB 저장
+```
+
 ## 🛠️ 주요 기능
 
 ### 1. 파일 업로드 및 처리
@@ -90,12 +112,14 @@ ZIP 압축 해제 → Python 파일 추출 → 파일 내용 읽기 → 메모�
 ### 2. AI 기반 보안 분석
 - **취약점 탐지**: LSTM 모델을 사용한 취약점 패턴 인식
 - **악성코드 탐지**: LSTM 모델을 사용한 악성코드 패턴 인식
+- **ML 통합 분석**: LSTM + XGBoost 기반 패키지 보안 분석
 - **다중 프로세스**: 3개 워커 프로세스로 병렬 분석
 - **실시간 결과**: 분석 진행 상황 실시간 업데이트
 
 ### 3. 웹 인터페이스
 - **대시보드**: 전체 분석 통계 및 최근 세션 목록
 - **분석 결과 뷰**: 취약점/악성코드별 결과 표시
+- **ML 분석 뷰**: LSTM + XGBoost 통합 분석 결과 표시
 - **소스코드 뷰어**: 파일 클릭 시 모달로 소스코드 표시
 - **반응형 디자인**: Bootstrap 5 기반 모바일 친화적 UI
 
@@ -111,6 +135,7 @@ ZIP 압축 해제 → Python 파일 추출 → 파일 내용 읽기 → 메모�
 - `GET /session/{session_id}` - 세션 상세
 - `GET /session/{session_id}/vulnerable` - 취약점 분석 결과
 - `GET /session/{session_id}/malicious` - 악성코드 분석 결과
+- `GET /session/{session_id}/ML` - ML 패키지 분석 결과
 
 ### REST API
 
@@ -127,10 +152,15 @@ ZIP 압축 해제 → Python 파일 추출 → 파일 내용 읽기 → 메모�
 - `POST /api/v1/upload/bert/mal` - BERT 악성코드 분석만
 - `POST /api/v1/upload/bert/vul` - BERT 취약점 분석만
 
+**ML 통합 모델:**
+- `POST /api/v1/upload/ML` - ML 패키지 분석 (LSTM + XGBoost)
+
 #### 세션 및 결과 조회
 - `GET /api/v1/sessions` - 세션 목록
 - `GET /api/v1/sessions/{session_id}` - 세션 정보
 - `GET /api/v1/source/{session_id}/{file_path}` - 세션 기반 소스코드 조회
+- `GET /api/v1/sessions/ML/{session_id}` - ML 분석 결과 조회
+- `GET /api/v1/sessions/ML/{session_id}/summary` - ML 분석 요약 조회
 - `GET /api/v1/stats` - 분석 통계
 - `GET /health` - 서버 상태 확인
 
@@ -154,6 +184,13 @@ ZIP 압축 해제 → Python 파일 추출 → 파일 내용 읽기 → 메모�
 - **bert_vul_safe**: BERT 취약점 관점 안전한 파일
 - **bert_mal_safe**: BERT 악성코드 관점 안전한 파일
 
+### ML 통합 테이블
+- **pkg_vul_analysis**: ML 패키지 분석 결과 (LSTM + XGBoost)
+  - 메타데이터 정보 (패키지명, 요약, 작성자, 버전, 다운로드 수)
+  - LSTM 분석 결과 (취약점 상태, CWE 라벨, 신뢰도)
+  - XGBoost 분석 결과 (악성 예측, 신뢰도)
+  - 통합 분석 결과 (최종 악성 상태, 위협 수준)
+
 ## 🚀 실행 방법
 
 1. **의존성 설치**
@@ -162,9 +199,10 @@ ZIP 압축 해제 → Python 파일 추출 → 파일 내용 읽기 → 메모�
    ```
    
    **통합된 의존성:**
-   - FastAPI 웹 서버 (python-server)
+   - PySecure 웹 서버 (FastAPI 기반)
    - 취약점 분석 LSTM 모델 (safepy_3)
    - 악성코드 분석 LSTM 모델 (safepy_3_malicious)
+   - ML 통합 분석 모델 (safepy_3_malicious_ML)
 
 2. **서버 실행**
    ```bash
@@ -179,8 +217,9 @@ ZIP 압축 해제 → Python 파일 추출 → 파일 내용 읽기 → 메모�
 ## 📦 의존성 구성
 
 ### 핵심 라이브러리
-- **FastAPI**: 웹 서버 프레임워크
+- **FastAPI**: PySecure 웹 서버 프레임워크
 - **TensorFlow**: LSTM 모델 실행
+- **XGBoost**: ML 악성 패키지 판별
 - **scikit-learn**: 라벨 인코더 및 전처리
 - **pandas/numpy**: 데이터 처리
 - **gensim**: Word2Vec 모델
@@ -188,7 +227,9 @@ ZIP 압축 해제 → Python 파일 추출 → 파일 내용 읽기 → 메모�
 
 ### 버전 호환성
 - Python: 3.8 ~ 3.11
+- PySecure: 2.0.0
 - TensorFlow: 2.16.1
+- XGBoost: 3.0.5
 - scikit-learn: 1.3.2
 
 ## 📊 성능 특성
@@ -219,6 +260,7 @@ ZIP 압축 해제 → Python 파일 추출 → 파일 내용 읽기 → 메모�
 3. **배치 처리**: 대용량 파일 배치 분석 기능
 4. **API 확장**: RESTful API 기능 확장
 5. **모니터링**: 시스템 성능 모니터링 및 알림 기능
+6. **ML 모델 확장**: 추가 ML 모델 통합 및 성능 최적화
 
 ## 🧹 리팩토링 완료 사항
 
@@ -242,6 +284,14 @@ ZIP 압축 해제 → Python 파일 추출 → 파일 내용 읽기 → 메모�
 - ✅ 에러 처리 개선
 - ✅ 성능 최적화
 
+### ML 통합 완료
+- ✅ ML 패키지 분석기 구현 (LSTM + XGBoost)
+- ✅ pkg_vul_analysis 테이블 추가
+- ✅ ML 전용 API 엔드포인트 구현
+- ✅ ML 분석 결과 웹 페이지 구현
+- ✅ 대시보드 ML 분석 옵션 추가
+- ✅ comprehensive_analysis_results 형태의 통합 결과 생성
+
 ## 📚 개발자 가이드
 
 ### 코드 스타일
@@ -259,3 +309,20 @@ ZIP 압축 해제 → Python 파일 추출 → 파일 내용 읽기 → 메모�
 - `config.py`에서 배치 크기 조정
 - 워커 프로세스 수 조정 (기본 3개)
 - 메모리 사용량 모니터링
+
+### PySecure ML 분석 사용법
+- 대시보드에서 "ML (LSTM + XGBoost)" 모델 선택
+- ZIP 파일 업로드 후 분석 결과 확인
+- `/session/{session_id}/ML`에서 상세 결과 조회
+- 악성/취약점/안전 패키지별 필터링 가능
+
+### ML 모델 파일 위치
+```
+safepy_3_malicious_ML/
+├── model/
+│   ├── model_mal.pkl              # LSTM 모델
+│   └── label_encoder_mal.pkl      # 라벨 인코더
+├── w2v/
+│   └── word2vec_withString10-6-100.model  # Word2Vec 모델
+└── xgboost_model.pkl              # XGBoost 모델
+```

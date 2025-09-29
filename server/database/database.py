@@ -100,6 +100,39 @@ class LSTM_MAL_SAFE(Base):
     upload_time = Column(DateTime, default=datetime.utcnow)
     created_at = Column(DateTime, default=datetime.utcnow)
 
+class PKG_VUL_ANALYSIS(Base):
+    """패키지 취약점 분석 결과 테이블 (LSTM + XGBoost 통합)"""
+    __tablename__ = "pkg_vul_analysis"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    session_id = Column(String, index=True)
+    package_name = Column(String, index=True)
+    
+    # 메타데이터 정보
+    summary = Column(Text)
+    author = Column(String)
+    author_email = Column(String)
+    version = Column(String)
+    download_count = Column(Integer)
+    
+    # LSTM 분석 결과
+    lstm_vulnerability_status = Column(String)  # "Vulnerable" or "Not Vulnerable"
+    lstm_cwe_label = Column(String)
+    lstm_confidence = Column(Float)
+    
+    # XGBoost ML 분석 결과
+    xgboost_prediction = Column(Integer)  # 0: 정상, 1: 악성
+    xgboost_confidence = Column(Float)
+    
+    # 통합 분석 결과
+    final_malicious_status = Column(Boolean)  # True: 악성, False: 정상
+    threat_level = Column(Integer)  # 0: 낮음, 1: 보통, 2: 높음
+    
+    # 분석 메타데이터
+    analysis_time = Column(Float)
+    upload_time = Column(DateTime, default=datetime.utcnow)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
 class BERT_MAL(Base):
     """BERT 악성코드 분석 결과 테이블"""
     __tablename__ = "bert_mal"
@@ -183,6 +216,7 @@ class main_log(Base):
     mal_flag = Column(Boolean, default=False)
     is_bert = Column(Boolean, default=False) # BERT 모델 사용 여부
     is_mal = Column(Boolean, default=False) # 악성코드 분석 여부 (LSTM/BERT 구분)
+    is_ml = Column(Boolean, default=False) # ML 통합 분석 여부 (LSTM + XGBoost)
     is_safe = Column(Boolean, default=True)
     created_at = Column(DateTime, default=datetime.utcnow)
 
@@ -191,10 +225,29 @@ def init_database():
     try:
         # 모든 테이블 생성
         Base.metadata.create_all(bind=engine)
+        
+        # 기존 main_log 테이블에 is_ml 컬럼 추가 (없는 경우에만)
+        try:
+            with engine.connect() as conn:
+                # is_ml 컬럼이 있는지 확인
+                result = conn.execute("PRAGMA table_info(main_log)")
+                columns = [row[1] for row in result.fetchall()]
+                
+                if 'is_ml' not in columns:
+                    print("🔧 Adding is_ml column to main_log table...")
+                    conn.execute("ALTER TABLE main_log ADD COLUMN is_ml BOOLEAN DEFAULT 0")
+                    conn.commit()
+                    print("✅ is_ml column added successfully")
+                else:
+                    print("✅ is_ml column already exists")
+        except Exception as e:
+            print(f"⚠️ Error adding is_ml column: {e}")
+        
         print("✅ Integrated database initialized successfully")
         print(f"📁 Database file: {DB_PATH}")
-        print("📊 Tables created: lstm_vul, lstm_mal, lstm_vul_safe, lstm_mal_safe, bert_mal, bert_mal_safe, bert_vul, bert_vul_safe, main_log")
+        print("📊 Tables created: lstm_vul, lstm_mal, lstm_vul_safe, lstm_mal_safe, bert_mal, bert_mal_safe, bert_vul, bert_vul_safe, pkg_vul_analysis, main_log")
         print("🔧 BERT integration: server/models/bert_mal (malicious), server/models/bert_vul (vulnerability)")
+        print("🧠 ML integration: pkg_vul_analysis table for LSTM + XGBoost results")
     except Exception as e:
         print(f"❌ Error initializing integrated database: {e}")
 
@@ -206,7 +259,7 @@ def get_db() -> Session:
     finally:
         pass
 
-def save_analysis_results(session_id: str, results: List[Dict[str, Any]], upload_info: Dict[str, Any], mode: str = "both", is_bert: bool = False) -> Dict[str, Any]:
+def save_analysis_results(session_id: str, results: List[Dict[str, Any]], upload_info: Dict[str, Any], mode: str = "both", is_bert: bool = False, is_ml: bool = False) -> Dict[str, Any]:
     """분석 결과를 통합 데이터베이스에 저장"""
     db = get_db()
     try:
@@ -390,6 +443,7 @@ def save_analysis_results(session_id: str, results: List[Dict[str, Any]], upload
             mal_flag=mal_flag_value,
             is_bert=is_bert,
             is_mal=(mode == "mal"),  # 악성코드만 분석하는 경우
+            is_ml=is_ml,  # ML 분석 여부
             is_safe=is_safe
         )
         db.add(log_record)
@@ -422,10 +476,15 @@ def get_session_summary(session_id: str) -> Optional[Dict[str, Any]]:
         if not log_record:
             return None
         
-        # BERT 분석인지 확인
+        # 분석 타입 확인
         is_bert_analysis = bool(log_record.is_bert) if log_record.is_bert is not None else False
+        is_ml_analysis = bool(log_record.is_ml) if log_record.is_ml is not None else False
         
-        if is_bert_analysis:
+        if is_ml_analysis:
+            # ML 분석 결과 조회
+            ml_records = db.query(PKG_VUL_ANALYSIS).filter(PKG_VUL_ANALYSIS.session_id == session_id).all()
+            unique_safe_files = sum(1 for r in ml_records if not r.final_malicious_status and r.lstm_vulnerability_status != "Vulnerable")
+        elif is_bert_analysis:
             # BERT 분석 결과 조회
             vul_records = db.query(BERT_VUL).filter(BERT_VUL.session_id == session_id).all()
             vul_safe_records = db.query(BERT_VUL_SAFE).filter(BERT_VUL_SAFE.session_id == session_id).all()
@@ -471,6 +530,7 @@ def get_session_summary(session_id: str) -> Optional[Dict[str, Any]]:
             "mal_flag": bool(log_record.mal_flag) if log_record.mal_flag is not None else False,
             "is_bert": bool(log_record.is_bert) if log_record.is_bert is not None else False,
             "is_mal": bool(log_record.is_mal) if log_record.is_mal is not None else False,
+            "is_ml": bool(log_record.is_ml) if log_record.is_ml is not None else False,
             "is_safe": bool(log_record.is_safe) if log_record.is_safe is not None else True,
             "vulnerability_results": [
                 {
@@ -590,6 +650,7 @@ def get_recent_sessions(limit: int = 10) -> List[Dict[str, Any]]:
                 "mal_flag": session.mal_flag,
                 "is_bert": session.is_bert,
                 "is_mal": session.is_mal,
+                "is_ml": session.is_ml,
                 "is_safe": session.is_safe,
                 "created_at": session.created_at
             }
@@ -599,5 +660,163 @@ def get_recent_sessions(limit: int = 10) -> List[Dict[str, Any]]:
     except Exception as e:
         print(f"❌ Error getting recent sessions: {e}")
         return []
+    finally:
+        db.close()
+
+# =============================================================================
+# PKG_VUL_ANALYSIS 관련 CRUD 함수들
+# =============================================================================
+
+def save_pkg_vul_analysis_results(session_id: str, results: List[Dict[str, Any]]) -> bool:
+    """패키지 취약점 분석 결과 저장"""
+    db = get_db()
+    try:
+        for result in results:
+            pkg_analysis = PKG_VUL_ANALYSIS(
+                session_id=session_id,
+                package_name=result.get("package_name", ""),
+                summary=result.get("summary", ""),
+                author=result.get("author", ""),
+                author_email=result.get("author_email", ""),
+                version=result.get("version", ""),
+                download_count=result.get("download_count", 0),
+                lstm_vulnerability_status=result.get("lstm_vulnerability_status", ""),
+                lstm_cwe_label=result.get("lstm_cwe_label", ""),
+                lstm_confidence=result.get("lstm_confidence", 0.0),
+                xgboost_prediction=result.get("xgboost_prediction", 0),
+                xgboost_confidence=result.get("xgboost_confidence", 0.0),
+                final_malicious_status=result.get("final_malicious_status", False),
+                threat_level=result.get("threat_level", 0),
+                analysis_time=result.get("analysis_time", 0.0)
+            )
+            db.add(pkg_analysis)
+        
+        db.commit()
+        print(f"✅ Saved {len(results)} package analysis results for session {session_id}")
+        return True
+        
+    except Exception as e:
+        print(f"❌ Error saving package analysis results: {e}")
+        db.rollback()
+        return False
+    finally:
+        db.close()
+
+def save_ml_analysis_log(session_id: str, upload_info: Dict[str, Any], results: List[Dict[str, Any]], analysis_time: float) -> bool:
+    """ML 분석 결과를 main_log에 저장"""
+    db = get_db()
+    try:
+        # 통계 계산
+        total_packages = len(results)
+        malicious_packages = sum(1 for r in results if r.get("final_malicious_status", False))
+        vulnerable_packages = sum(1 for r in results if r.get("lstm_vulnerability_status") == "Vulnerable")
+        safe_packages = total_packages - malicious_packages - vulnerable_packages
+        
+        # main_log에 저장
+        log_record = main_log(
+            session_id=session_id,
+            upload_time=upload_info.get("upload_time", datetime.utcnow()),
+            filename=upload_info.get("filename", ""),
+            file_size=upload_info.get("file_size", 0),
+            analysis_model="ML (LSTM + XGBoost)",
+            analysis_duration=analysis_time,
+            total_files=total_packages,
+            safe_files=safe_packages,
+            vulnerable_files=vulnerable_packages,
+            malicious_files=malicious_packages,
+            vul_flag=vulnerable_packages > 0,
+            mal_flag=malicious_packages > 0,
+            is_bert=False,
+            is_mal=False,
+            is_ml=True,  # ML 분석 플래그
+            is_safe=safe_packages == total_packages
+        )
+        
+        db.add(log_record)
+        db.commit()
+        print(f"✅ Saved ML analysis log for session {session_id}")
+        return True
+    except Exception as e:
+        print(f"❌ Error saving ML analysis log: {e}")
+        db.rollback()
+        return False
+    finally:
+        db.close()
+
+def get_pkg_vul_analysis_by_session(session_id: str) -> List[Dict[str, Any]]:
+    """세션별 패키지 취약점 분석 결과 조회"""
+    db = get_db()
+    try:
+        results = db.query(PKG_VUL_ANALYSIS).filter(
+            PKG_VUL_ANALYSIS.session_id == session_id
+        ).all()
+        
+        analysis_results = []
+        for result in results:
+            analysis_results.append({
+                "id": result.id,
+                "session_id": result.session_id,
+                "package_name": result.package_name,
+                "summary": result.summary,
+                "author": result.author,
+                "author_email": result.author_email,
+                "version": result.version,
+                "download_count": result.download_count,
+                "lstm_vulnerability_status": result.lstm_vulnerability_status,
+                "lstm_cwe_label": result.lstm_cwe_label,
+                "lstm_confidence": result.lstm_confidence,
+                "xgboost_prediction": result.xgboost_prediction,
+                "xgboost_confidence": result.xgboost_confidence,
+                "final_malicious_status": result.final_malicious_status,
+                "threat_level": result.threat_level,
+                "analysis_time": result.analysis_time,
+                "upload_time": result.upload_time.isoformat() if result.upload_time else None,
+                "created_at": result.created_at.isoformat() if result.created_at else None
+            })
+        
+        return analysis_results
+        
+    except Exception as e:
+        print(f"❌ Error getting package analysis results: {e}")
+        return []
+    finally:
+        db.close()
+
+def get_pkg_vul_analysis_summary(session_id: str) -> Dict[str, Any]:
+    """패키지 취약점 분석 결과 요약"""
+    db = get_db()
+    try:
+        results = db.query(PKG_VUL_ANALYSIS).filter(
+            PKG_VUL_ANALYSIS.session_id == session_id
+        ).all()
+        
+        total_packages = len(results)
+        malicious_packages = sum(1 for r in results if r.final_malicious_status)
+        vulnerable_packages = sum(1 for r in results if r.lstm_vulnerability_status == "Vulnerable")
+        safe_packages = total_packages - malicious_packages
+        
+        return {
+            "session_id": session_id,
+            "total_packages": total_packages,
+            "malicious_packages": malicious_packages,
+            "vulnerable_packages": vulnerable_packages,
+            "safe_packages": safe_packages,
+            "malicious_rate": (malicious_packages / total_packages * 100) if total_packages > 0 else 0,
+            "vulnerable_rate": (vulnerable_packages / total_packages * 100) if total_packages > 0 else 0,
+            "safe_rate": (safe_packages / total_packages * 100) if total_packages > 0 else 0
+        }
+        
+    except Exception as e:
+        print(f"❌ Error getting package analysis summary: {e}")
+        return {
+            "session_id": session_id,
+            "total_packages": 0,
+            "malicious_packages": 0,
+            "vulnerable_packages": 0,
+            "safe_packages": 0,
+            "malicious_rate": 0,
+            "vulnerable_rate": 0,
+            "safe_rate": 0
+        }
     finally:
         db.close()

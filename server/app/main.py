@@ -36,9 +36,14 @@ import asyncio
 from datetime import datetime
 
 # 내부 모듈 import
-from database.database import init_database, save_analysis_results, get_session_summary, get_stats, get_recent_sessions
+from database.database import (
+    init_database, save_analysis_results, get_session_summary, get_stats, get_recent_sessions,
+    save_pkg_vul_analysis_results, get_pkg_vul_analysis_by_session, get_pkg_vul_analysis_summary,
+    save_ml_analysis_log
+)
 from analysis.integrated_lstm_analyzer import IntegratedLSTMAnalyzer
 from analysis.bert_analyzer import BERTAnalyzer
+from analysis.ml_package_analyzer import MLPackageAnalyzer
 from app.services.file_service import FileService
 from config import UPLOAD_DIR, MAX_FILE_SIZE, ALLOWED_EXTENSIONS
 
@@ -48,9 +53,9 @@ from config import UPLOAD_DIR, MAX_FILE_SIZE, ALLOWED_EXTENSIONS
 
 # FastAPI 앱 인스턴스 생성
 app = FastAPI(
-    title="Python Security Analysis System",
-    description="AI-powered Python code security analysis with vulnerability and malware detection",
-    version="1.0.0"
+    title="PySecure - Python Security Analysis System",
+    description="AI-powered Python code security analysis with vulnerability and malware detection using LSTM, BERT, and ML models",
+    version="2.0.0"
 )
 
 # 정적 파일 서빙은 CDN을 통해 제공 (Bootstrap, Prism.js 등)
@@ -80,22 +85,26 @@ integrated_analyzer = IntegratedLSTMAnalyzer(models_dir)
 # BERT 분석기 초기화
 bert_analyzer = BERTAnalyzer(models_dir)
 
+# ML 패키지 분석기 초기화 (LSTM + XGBoost)
+ml_package_analyzer = MLPackageAnalyzer()
+
 @app.on_event("startup")
 async def startup_event():
     """Initialize services on startup"""
-    print("Starting Python Security Analysis System...")
-    print("Database initialized")
-    print("Services ready")
+    print("🚀 Starting PySecure - Python Security Analysis System...")
+    print("📊 Database initialized")
+    print("🧠 AI Models loaded (LSTM, BERT, ML)")
+    print("✅ Services ready")
 
 @app.on_event("shutdown")
 async def shutdown_event():
     """Cleanup on shutdown"""
-    print("Shutting down Python Security Analysis System...")
+    print("🛑 Shutting down PySecure...")
     if integrated_analyzer:
         integrated_analyzer.shutdown_executor()
     if bert_analyzer:
         bert_analyzer.shutdown_executor()
-    print("Shutdown complete")
+    print("✅ Shutdown complete")
 
 # =============================================================================
 # 웹 페이지 라우트
@@ -841,14 +850,17 @@ async def test_endpoint():
         stats = get_db_stats()
         return {
             "status": "ok",
+            "service": "PySecure",
+            "version": "2.0.0",
             "stats": stats,
-            "message": "Server is working correctly"
+            "message": "PySecure server is working correctly"
         }
     except Exception as e:
         return {
             "status": "error",
+            "service": "PySecure",
             "error": str(e),
-            "message": "Server has issues"
+            "message": "PySecure server has issues"
         }
 
 @app.get("/health")
@@ -856,10 +868,222 @@ async def health_check():
     """Health check endpoint to keep server alive"""
     return {
         "status": "healthy",
+        "service": "PySecure",
+        "version": "2.0.0",
         "timestamp": datetime.now().isoformat(),
         "active_tasks": integrated_analyzer.get_active_tasks_count(),
-        "message": "Server is running and ready for analysis"
+        "message": "PySecure server is running and ready for analysis"
         }
+
+# =============================================================================
+# ML 패키지 분석 엔드포인트
+# =============================================================================
+
+@app.post("/api/v1/upload/ML")
+async def upload_file_ml(file: UploadFile = File(...)):
+    """Upload ZIP file for ML analysis (LSTM + XGBoost)"""
+    try:
+        # Validate file
+        if not file.filename:
+            raise HTTPException(status_code=400, detail="No filename provided")
+        
+        file_extension = Path(file.filename).suffix.lower()
+        if file_extension not in ALLOWED_EXTENSIONS:
+            raise HTTPException(status_code=400, detail="Only ZIP files are allowed")
+        
+        # Check file size
+        file_content = await file.read()
+        if len(file_content) > MAX_FILE_SIZE:
+            raise HTTPException(status_code=400, detail="File too large")
+        
+        # Generate session ID
+        session_id = str(uuid.uuid4())
+        
+        # Save file using file_service (same as other endpoints)
+        file_path = file_service.save_uploaded_file(file_content, session_id, file.filename)
+        
+        # Start ML analysis in background
+        asyncio.create_task(analyze_file_ml_async(session_id, str(file_path), file.filename, len(file_content)))
+        
+        return JSONResponse({
+            "session_id": session_id,
+            "filename": file.filename,
+            "status": "uploaded",
+            "message": "File uploaded successfully. ML analysis (LSTM + XGBoost) started."
+        })
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+async def analyze_file_ml_async(session_id: str, file_path: str, filename: str, file_size: int):
+    """ML 백그라운드 분석 작업 - ZIP → .py 추출 → ML 분석 → DB 저장
+    
+    Args:
+        session_id: 세션 ID
+        file_path: 파일 경로
+        filename: 파일명
+        file_size: 파일 크기
+    """
+    try:
+        print(f"🔍 ML 분석 시작: {filename} (Session: {session_id})")
+        
+        # 파일 추출 (기존 패턴과 동일)
+        extracted_files = await file_service.extract_zip_file(file_path)
+        
+        if not extracted_files:
+            print(f"❌ 파일 추출 실패: {session_id}")
+            return
+        
+        # ML 패키지 분석 수행
+        analysis_result = ml_package_analyzer.analyze_package_zip(file_path, str(UPLOAD_DIR / session_id / "extracted"))
+        
+        if "error" in analysis_result:
+            print(f"❌ ML 분석 실패: {analysis_result['error']}")
+            return
+        
+        # 분석 결과를 DB에 저장
+        if analysis_result.get("success") and analysis_result.get("results"):
+            # 결과 데이터 준비
+            db_results = []
+            for result in analysis_result["results"]:
+                db_result = {
+                    "package_name": result.get("name", ""),
+                    "summary": result.get("summary", ""),
+                    "author": result.get("author", ""),
+                    "author_email": result.get("author-email", ""),
+                    "version": result.get("version", ""),
+                    "download_count": result.get("download", 0),
+                    "lstm_vulnerability_status": result.get("lstm_vulnerability_status", ""),
+                    "lstm_cwe_label": result.get("lstm_cwe_label", ""),
+                    "lstm_confidence": result.get("lstm_confidence", 0.0),
+                    "xgboost_prediction": result.get("xgboost_prediction", 0),
+                    "xgboost_confidence": result.get("xgboost_confidence", 0.0),
+                    "final_malicious_status": bool(result.get("xgboost_prediction", 0)),
+                    "threat_level": 2 if result.get("xgboost_prediction", 0) == 1 else 0,
+                    "analysis_time": analysis_result.get("analysis_time", 0.0)
+                }
+                db_results.append(db_result)
+            
+            # PKG_VUL_ANALYSIS 테이블에 저장
+            save_pkg_vul_analysis_results(session_id, db_results)
+            
+            # main_log에 저장
+            upload_info = {
+                "upload_time": datetime.utcnow(),
+                "filename": filename,
+                "file_size": file_size
+            }
+            save_ml_analysis_log(session_id, upload_info, db_results, analysis_result.get("analysis_time", 0.0))
+        
+        print(f"✅ ML 분석 완료: {filename} (Session: {session_id})")
+        
+    except Exception as e:
+        print(f"❌ ML 분석 중 오류: {e}")
+        import traceback
+        traceback.print_exc()
+
+@app.get("/api/v1/sessions/ML/{session_id}")
+async def get_ml_analysis_results(session_id: str):
+    """
+    ML 패키지 분석 결과 조회
+    
+    Args:
+        session_id: 분석 세션 ID
+        
+    Returns:
+        JSON: 분석 결과 상세 정보
+    """
+    try:
+        # DB에서 분석 결과 조회
+        results = get_pkg_vul_analysis_by_session(session_id)
+        summary = get_pkg_vul_analysis_summary(session_id)
+        
+        if not results:
+            raise HTTPException(status_code=404, detail="분석 결과를 찾을 수 없습니다.")
+        
+        return {
+            "session_id": session_id,
+            "summary": summary,
+            "results": results,
+            "total_packages": len(results),
+            "status": "success"
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"❌ ML 분석 결과 조회 중 오류: {e}")
+        raise HTTPException(status_code=500, detail=f"결과 조회 중 오류가 발생했습니다: {str(e)}")
+
+@app.get("/api/v1/sessions/ML/{session_id}/summary")
+async def get_ml_analysis_summary(session_id: str):
+    """
+    ML 패키지 분석 결과 요약 조회
+    
+    Args:
+        session_id: 분석 세션 ID
+        
+    Returns:
+        JSON: 분석 결과 요약 정보
+    """
+    try:
+        summary = get_pkg_vul_analysis_summary(session_id)
+        
+        if summary["total_packages"] == 0:
+            raise HTTPException(status_code=404, detail="분석 결과를 찾을 수 없습니다.")
+        
+        return {
+            "session_id": session_id,
+            "summary": summary,
+            "status": "success"
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"❌ ML 분석 요약 조회 중 오류: {e}")
+        raise HTTPException(status_code=500, detail=f"요약 조회 중 오류가 발생했습니다: {str(e)}")
+
+@app.get("/session/{session_id}/ML", response_class=HTMLResponse)
+async def ml_analysis_view(session_id: str, request: Request):
+    """
+    ML 패키지 분석 결과 웹 페이지
+    
+    Args:
+        session_id: 분석 세션 ID
+        
+    Returns:
+        HTML: 분석 결과 웹 페이지
+    """
+    try:
+        # DB에서 분석 결과 조회
+        results = get_pkg_vul_analysis_by_session(session_id)
+        summary = get_pkg_vul_analysis_summary(session_id)
+        
+        if not results:
+            return templates.TemplateResponse("error.html", {
+                "request": request,
+                "error_title": "분석 결과를 찾을 수 없습니다",
+                "error_message": f"세션 ID '{session_id}'에 대한 분석 결과가 존재하지 않습니다.",
+                "error_code": 404
+            })
+        
+        return templates.TemplateResponse("ml_analysis_view.html", {
+            "request": request,
+            "session_id": session_id,
+            "results": results,
+            "summary": summary,
+            "total_packages": len(results)
+        })
+        
+    except Exception as e:
+        print(f"❌ ML 분석 결과 페이지 로드 중 오류: {e}")
+        return templates.TemplateResponse("error.html", {
+            "request": request,
+            "error_title": "페이지 로드 오류",
+            "error_message": f"분석 결과를 불러오는 중 오류가 발생했습니다: {str(e)}",
+            "error_code": 500
+        })
 
 if __name__ == "__main__":
     import uvicorn
