@@ -277,8 +277,8 @@ class FinalUnifiedAnalyzer:
         """통합된 다운로드 수 조회"""
         download_count = self.get_pepy_downloads(package_name, "0SRbc/jRFsHYxOShwIQ/N0jtrKf1syMW")
         if download_count == -1:
-            #download_count = self.get_download_count_bq(package_name, "./plated-mantis-471407-m4-b14f1b3e761d.json")
-            download_count = 0  # BigQuery 접근이 불가능할 경우 0으로 설정
+            download_count = self.get_download_count_bq(package_name, "./plated-mantis-471407-m4-b14f1b3e761d.json")
+            #download_count = 0  # BigQuery 접근이 불가능할 경우 0으로 설정
         return download_count
 
     def shannon_entropy(self, s):
@@ -329,11 +329,10 @@ class FinalUnifiedAnalyzer:
         df = pd.DataFrame(self.meta_datas)
 
         # 기본 전처리
-        df["download"] = df["download"].fillna(0).astype(int)
-        df["download_log"] = df["download"].apply(lambda x: np.log1p(x))
+        df["download_log"] = df["download"].fillna(0).astype(int)
+        #df["download_log"] = df["download"].apply(lambda x: np.log1p(x))
 
-        scaler = StandardScaler()
-        df["download_scaled"] = scaler.fit_transform(df[["download_log"]])
+        
 
         # 설명 분석
         df["summary"] = df["summary"].fillna("")
@@ -355,9 +354,7 @@ class FinalUnifiedAnalyzer:
         df["download_too_high"] = df["download_log"] > df["download_log"].quantile(0.95)
         df["is_disposable"] = False
 
-        # MinMaxScaler로 download_log 정규화
-        scaler2 = MinMaxScaler()
-        df["download_log_scaled"] = 1 - scaler2.fit_transform(df[["download_log"]])
+
 
         self.df = df
         return df
@@ -612,7 +609,7 @@ class FinalUnifiedAnalyzer:
         merged_df['vulnerability_status_noisy'] = merged_df['vulnerability_status_numeric']
         merged_df['cwe_label_noisy'] = merged_df['cwe_label_numeric'] 
         merged_df['threat_level_noisy'] = merged_df.apply(self.combined_threat, axis=1)
-        merged_df['download_log_scaled_noisy'] = merged_df['download_log_scaled']
+        merged_df['download_log_noisy'] = merged_df['download_log']
         
         self.df = merged_df
         
@@ -666,7 +663,7 @@ class FinalUnifiedAnalyzer:
             "summary_length", "summary_too_short", "summary_too_long",
             "summary_entropy", "summary_low_entropy", "version_valid",
             "is_typo_like",
-            "download_log_scaled_noisy",
+            "download_log_noisy",
             "vulnerability_status_noisy", "threat_level_noisy", "cwe_label_noisy"
         ]
         
