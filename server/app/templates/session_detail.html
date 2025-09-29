@@ -253,7 +253,7 @@
                 <div class="card">
                     <div class="card-header d-flex justify-content-between align-items-center">
                         <h5 class="mb-0">
-                            <i class="fas fa-bug me-2"></i>취약점 분석 결과 (LSTM_VUL)
+                            <i class="fas fa-bug me-2"></i>취약점 분석 결과 {% if session.is_bert %}(BERT_VUL){% else %}(LSTM_VUL){% endif %}
                         </h5>
                         <span class="badge warning-badge">취약 {{ session.vulnerability_results|length }} / 안전 {{ session.vulnerability_safe_results|length }}</span>
                     </div>
@@ -333,7 +333,7 @@
                 <div class="card">
                     <div class="card-header d-flex justify-content-between align-items-center">
                         <h5 class="mb-0">
-                            <i class="fas fa-bug me-2"></i>악성 코드 분석 결과 (LSTM_MAL)
+                            <i class="fas fa-bug me-2"></i>악성 코드 분석 결과 {% if session.is_bert %}(BERT_MAL){% else %}(LSTM_MAL){% endif %}
                         </h5>
                         <span class="badge danger-badge">악성 {{ session.malicious_results|length }} / 안전 {{ session.malicious_safe_results|length }}</span>
                     </div>

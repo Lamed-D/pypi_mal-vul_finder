@@ -414,13 +414,25 @@ def get_session_summary(session_id: str) -> Optional[Dict[str, Any]]:
         if not log_record:
             return None
         
-        # 취약점 분석 결과 조회
-        vul_records = db.query(LSTM_VUL).filter(LSTM_VUL.session_id == session_id).all()
-        vul_safe_records = db.query(LSTM_VUL_SAFE).filter(LSTM_VUL_SAFE.session_id == session_id).all()
+        # BERT 분석인지 확인
+        is_bert_analysis = bool(log_record.is_bert) if log_record.is_bert is not None else False
         
-        # 악성 코드 분석 결과 조회
-        mal_records = db.query(LSTM_MAL).filter(LSTM_MAL.session_id == session_id).all()
-        mal_safe_records = db.query(LSTM_MAL_SAFE).filter(LSTM_MAL_SAFE.session_id == session_id).all()
+        if is_bert_analysis:
+            # BERT 분석 결과 조회
+            vul_records = db.query(BERT_VUL).filter(BERT_VUL.session_id == session_id).all()
+            vul_safe_records = db.query(BERT_VUL_SAFE).filter(BERT_VUL_SAFE.session_id == session_id).all()
+            
+            # BERT 악성 코드 분석 결과 조회
+            mal_records = db.query(BERT_MAL).filter(BERT_MAL.session_id == session_id).all()
+            mal_safe_records = db.query(BERT_MAL_SAFE).filter(BERT_MAL_SAFE.session_id == session_id).all()
+        else:
+            # LSTM 분석 결과 조회
+            vul_records = db.query(LSTM_VUL).filter(LSTM_VUL.session_id == session_id).all()
+            vul_safe_records = db.query(LSTM_VUL_SAFE).filter(LSTM_VUL_SAFE.session_id == session_id).all()
+            
+            # LSTM 악성 코드 분석 결과 조회
+            mal_records = db.query(LSTM_MAL).filter(LSTM_MAL.session_id == session_id).all()
+            mal_safe_records = db.query(LSTM_MAL_SAFE).filter(LSTM_MAL_SAFE.session_id == session_id).all()
         
         return {
             "session_id": session_id,
