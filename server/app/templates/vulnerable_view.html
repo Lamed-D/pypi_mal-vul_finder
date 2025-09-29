@@ -284,7 +284,7 @@
                             </div>
                             {% if vulnerable_safe_files|length > 8 %}
                             <div class="text-center mt-3">
-                                <button class="btn btn-outline-success" id="show-more-vulnerable-btn" onclick="toggleSafeFiles('vulnerable')">
+                                <button class="btn btn-outline-success" id="show-more-vulnerable-btn" onclick="toggleSafeFiles('vulnerable', this)">
                                     <i class="fas fa-eye me-1"></i>나머지 {{ vulnerable_safe_files|length - 8 }}개 파일 보기
                                 </button>
                             </div>
