@@ -526,7 +526,7 @@ class MLPackageAnalyzer:
         merged_df['vulnerability_status_noisy'] = merged_df['vulnerability_status_numeric']
         merged_df['cwe_label_noisy'] = merged_df['cwe_label_numeric'] 
         merged_df['threat_level_noisy'] = merged_df.apply(self.combined_threat, axis=1)
-        merged_df['download_log_scaled_noisy'] = merged_df['download_log_scaled']
+        merged_df['download_log_noisy'] = merged_df['download_log']  # XGBoost 모델이 기대하는 피처명
         
         self.df = merged_df
         return True
@@ -553,13 +553,13 @@ class MLPackageAnalyzer:
             print("XGBoost 모델이 로드되지 않았습니다.")
             return False
         
-        # 피처 선택
+        # 피처 선택 (XGBoost 모델이 기대하는 피처명과 일치)
         features = [
             "is_disposable", 
             "summary_length", "summary_too_short", "summary_too_long",
             "summary_entropy", "summary_low_entropy", "version_valid",
             "is_typo_like",
-            "download_log_scaled_noisy",
+            "download_log_noisy",  # XGBoost 모델이 기대하는 피처명
             "vulnerability_status_noisy", "threat_level_noisy", "cwe_label_noisy"
         ]
         
@@ -698,6 +698,127 @@ class MLPackageAnalyzer:
                 "success": True,
                 "total_packages": len(results_list),
                 "analysis_time": total_time,
+                "results": results_list,
+                "summary": {
+                    "malicious_packages": sum(1 for r in results_list if r.get('xgboost_prediction', 0) == 1),
+                    "vulnerable_packages": sum(1 for r in results_list if r.get('lstm_vulnerability_status') == 'Vulnerable'),
+                    "safe_packages": sum(1 for r in results_list if r.get('xgboost_prediction', 0) == 0)
+                }
+            }
+            
+        except Exception as e:
+            print(f"❌ ML 패키지 분석 중 오류 발생: {e}")
+            return {"error": f"분석 중 오류 발생: {str(e)}"}
+        finally:
+            # 메모리 정리
+            try:
+                K.clear_session()
+            except:
+                pass
+    
+    def analyze_extracted_files(self, extract_dir: str, extracted_files: List[Dict[str, Any]]) -> Dict[str, Any]:
+        """추출된 파일들을 통한 패키지 분석 (서버 통합용)"""
+        try:
+            print("=== ML 패키지 분석 시작 (추출된 파일 사용) ===")
+            start_time = time.time()
+            
+            # 1. 추출된 파일들에서 소스코드 데이터 생성
+            print("1️⃣ 추출된 파일들에서 소스코드 데이터 생성...")
+            print(f"📁 총 {len(extracted_files)}개 파일 처리 중...")
+            source_data = []
+            for i, file_info in enumerate(extracted_files):
+                # file_service에서 반환하는 구조에 맞게 수정
+                relative_path = file_info.get('path', '')
+                file_name = file_info.get('name', '')
+                content = file_info.get('content', '')
+                
+                if i < 5:  # 처음 5개 파일만 로그 출력
+                    print(f"  📄 파일 {i+1}: {relative_path} ({len(content)} chars)")
+                
+                if file_name.endswith('.py') and content:
+                    try:
+                        cleaned_code = self.remove_comments(content)
+                        if cleaned_code.strip():
+                            # 패키지명 추출 (디렉토리 구조에서)
+                            path_parts = Path(relative_path).parts
+                            package_name = path_parts[0] if len(path_parts) > 0 else Path(file_name).stem
+                            source_data.append({
+                                "package_name": package_name,
+                                "merged_code": cleaned_code.strip()
+                            })
+                    except Exception as e:
+                        print(f"⚠️ 파일 처리 실패 {relative_path}: {e}")
+                        continue
+            
+            print(f"✅ {len(source_data)}개 패키지의 소스코드 추출 완료")
+            if not source_data:
+                print("❌ 소스코드 추출 실패: 유효한 Python 파일이 없습니다")
+                return {"error": "소스코드 추출 실패"}
+            
+            # 2. 메타데이터 추출 및 파싱
+            print("2️⃣ 메타데이터 추출 및 파싱...")
+            meta_data = self.extract_and_parse_metadata(extract_dir)
+            if not meta_data:
+                return {"error": "메타데이터 추출 실패"}
+            
+            # 3. 메타데이터 전처리
+            print("3️⃣ 메타데이터 전처리...")
+            df = self.preprocess_metadata()
+            if df is None:
+                return {"error": "메타데이터 전처리 실패"}
+            
+            # 4. LSTM 코드 분석
+            print("4️⃣ LSTM 코드 분석...")
+            lstm_results = self.analyze_lstm_codes(source_data)
+            if lstm_results is None:
+                return {"error": "LSTM 분석 실패"}
+            
+            # 5. LSTM 결과 통합
+            print("5️⃣ LSTM 결과 통합...")
+            if not self.integrate_lstm_results():
+                return {"error": "결과 통합 실패"}
+            
+            # 6. XGBoost 악성 예측
+            print("6️⃣ XGBoost 악성 패키지 예측...")
+            if not self.predict_malicious():
+                return {"error": "XGBoost 예측 실패"}
+            
+            # 7. 통합 결과 생성
+            print("7️⃣ 통합 분석 결과 생성...")
+            comprehensive_results = self.generate_comprehensive_results()
+            if comprehensive_results is None:
+                return {"error": "통합 결과 생성 실패"}
+            
+            end_time = time.time()
+            total_time = end_time - start_time
+            
+            # 결과를 서버 형식으로 변환
+            results_list = []
+            for _, row in comprehensive_results.iterrows():
+                result_item = {
+                    "name": row.get("package_name", ""),
+                    "summary": row.get("summary", ""),
+                    "author": row.get("author", ""),
+                    "author-email": row.get("author-email", ""),
+                    "version": row.get("version", ""),
+                    "download": row.get("download", 0),
+                    "lstm_vulnerability_status": row.get("lstm_vulnerability_status", "Not Vulnerable"),
+                    "lstm_cwe_label": row.get("lstm_cwe_label", "N/A"),
+                    "lstm_confidence": row.get("lstm_malicious_probability", 0.0),
+                    "xgboost_prediction": int(row.get("xgboost_prediction", 0)),
+                    "xgboost_confidence": float(row.get("xgboost_confidence", 0.0)),
+                    "final_malicious_status": bool(row.get("xgboost_prediction", 0)),
+                    "threat_level": 2 if row.get("xgboost_prediction", 0) == 1 else 0,
+                    "analysis_time": 0.0
+                }
+                results_list.append(result_item)
+            
+            print(f"✅ ML 분석 완료: {len(results_list)}개 패키지 분석")
+            
+            return {
+                "success": True,
+                "analysis_time": total_time,
+                "total_packages": len(results_list),
                 "results": results_list,
                 "summary": {
                     "malicious_packages": sum(1 for r in results_list if r.get('xgboost_prediction', 0) == 1),

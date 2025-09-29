@@ -934,8 +934,9 @@ async def analyze_file_ml_async(session_id: str, file_path: str, filename: str, 
             print(f"❌ 파일 추출 실패: {session_id}")
             return
         
-        # ML 패키지 분석 수행
-        analysis_result = ml_package_analyzer.analyze_package_zip(file_path, str(UPLOAD_DIR / session_id / "extracted"))
+        # ML 패키지 분석 수행 (추출된 파일들을 직접 사용)
+        extract_dir = UPLOAD_DIR / session_id / "extracted"
+        analysis_result = ml_package_analyzer.analyze_extracted_files(str(extract_dir), extracted_files)
         
         if "error" in analysis_result:
             print(f"❌ ML 분석 실패: {analysis_result['error']}")
