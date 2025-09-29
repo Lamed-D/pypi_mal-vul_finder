@@ -105,6 +105,7 @@ codebert_mal/source/**
 # Extracted packages directories (압축 해제된 패키지 디렉토리)
 codebert_mal/extracted_packages/**
 codebert_test2/extracted_packages/**
+safepy_3_malicious_ML/extracted_files/**
 
 # Analysis results and logs (분석 결과 및 로그 파일)
 #codebert_test2/logs/
@@ -113,3 +114,4 @@ codebert_test2/extracted_packages/**
 #codebert_mal/log/
 server/models/bert_mal/codebert/model.safetensors
 server/models/bert_vul/codebert/model.safetensors
+dataset/combined_2000_labeled_dataset_fixed.csv

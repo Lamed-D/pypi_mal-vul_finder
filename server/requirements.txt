@@ -36,16 +36,29 @@ numpy==1.26.4             # 수치 계산
 
 # 자연어 처리
 gensim==4.3.3             # Word2Vec 모델 (코드 토큰 임베딩)
+chardet==5.2.0            # 문자 인코딩 감지
+python-Levenshtein==0.27.1 # 문자열 유사도 계산
 
 # BERT 모델 (codebert_mal + codebert_test2)
 torch==2.2.2              # PyTorch (BERT 모델 실행)
 transformers==4.56.1      # Hugging Face Transformers (BERT 모델)
+
+# Google Cloud 서비스 (BigQuery 사용을 위해 필수)
+google-cloud-bigquery==3.36.0  # BigQuery 클라이언트
+google-auth==2.40.3            # 인증 라이브러리
+google-auth-oauthlib==1.2.0    # OAuth 인증
+google-auth-httplib2==0.2.0    # HTTP 라이브러리
 
 # =============================================================================
 # 파일 처리 및 유틸리티
 # =============================================================================
 aiofiles==23.2.1          # 비동기 파일 처리
 python-dotenv==1.0.0      # 환경변수 관리
+typing-extensions==4.14.1 # 타입 힌트 확장
+
+# 추가 의존성 (TensorFlow 관련)
+protobuf==4.25.1          # Protocol Buffers
+grpcio==1.60.0            # gRPC 통신
 
 # =============================================================================
 # 선택적 개발 도구 (주석 해제하여 사용)

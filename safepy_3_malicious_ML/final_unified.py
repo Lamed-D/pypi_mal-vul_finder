@@ -138,8 +138,8 @@ class FinalUnifiedAnalyzer:
 
     def extract_zip_and_process_source(self):
         """ZIP 파일 압축 해제 및 소스코드 처리"""
-        zip_dir = "./python-packages-1757531529324.zip"
-        extract_dir = "./extracted_files"
+        zip_dir = os.path.join(self.current_dir, "python-packages-1757531529324.zip")
+        extract_dir = os.path.join(self.current_dir, "extracted_files")
         
         if not os.path.exists(zip_dir):
             print(f"Warning: ZIP 파일을 찾을 수 없습니다: {zip_dir}")
@@ -150,7 +150,7 @@ class FinalUnifiedAnalyzer:
             zip_ref.extractall(extract_dir)
         
         # 소스코드 처리
-        root_path = './extracted_files/source'
+        root_path = os.path.join(extract_dir, 'source')
         if os.path.exists(root_path):
             data = self.process_directory(root_path)
             self.save_to_csv(data)
@@ -213,7 +213,7 @@ class FinalUnifiedAnalyzer:
 
     def extract_and_parse_metadata(self):
         """메타데이터 추출 및 파싱"""
-        extract_dir = "./extracted_files"
+        extract_dir = os.path.join(self.current_dir, "extracted_files")
         metadata_dir = os.path.join(extract_dir, "metadata")
         
         if not os.path.exists(metadata_dir):
