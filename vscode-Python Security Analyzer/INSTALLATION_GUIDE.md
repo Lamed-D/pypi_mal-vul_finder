@@ -1,11 +1,9 @@
-# Python Security Analyzer - 설치 및 사용 가이드
+# VS Code 확장 + Python 서버 프로젝트 설치 가이드
 
 ## 📋 프로젝트 개요
-이 프로젝트는 Python 코드의 보안 취약점과 악성코드를 AI 기반으로 분석하는 통합 시스템입니다:
-
-- **VS Code 확장**: 프로젝트 폴더를 ZIP으로 압축하여 분석 서버로 전송
-- **Python 분석 서버**: FastAPI 기반으로 ZIP 파일을 받아서 AI 모델로 분석
-- **다중 AI 모델**: LSTM, BERT, XGBoost 기반 취약점/악성코드 탐지
+이 프로젝트는 VS Code 확장과 Python FastAPI 서버로 구성되어 있습니다:
+- **VS Code 확장**: 선택한 폴더를 ZIP으로 압축하여 Python 서버로 업로드
+- **Python 서버**: FastAPI 기반으로 ZIP 파일을 받아서 처리 후 응답
 
 ## 🛠️ 사전 요구사항
 
@@ -20,7 +18,7 @@
 
 ### 2. Python 설치
 - **다운로드**: [Python 공식 사이트](https://www.python.org/downloads/)
-- **권장 버전**: Python 3.8 이상 (3.12 미만)
+- **권장 버전**: Python 3.8 이상
 - **확인 방법**:
   ```powershell
   python --version
@@ -35,103 +33,116 @@
 
 ### 1단계: 프로젝트 클론 및 이동
 ```powershell
-# 프로젝트 루트 폴더로 이동 (사용자 계정명에 맞게 경로 변경)
-cd C:\Users\<USER>\Documents\GitHub\pypi_mal-vul_finder
+# 프로젝트 폴더로 이동
+cd C:\Users\Lamed\Downloads\vscode-extension
 ```
 
 ### 2단계: VS Code 확장 의존성 설치
 ```powershell
-# VS Code 확장 폴더로 이동
-cd vscode-extension
-
 # Node.js 의존성 설치
 npm install
-
-# TypeScript 컴파일
-npm run compile
 ```
 
 ### 3단계: Python 서버 의존성 설치
-```powershell
-# 서버 폴더로 이동
-cd ..\server
 
-# Python 의존성 설치
-pip install -r requirements.txt
+#### 방법 A: uv 사용 (권장)
+```powershell
+# uv 설치
+pip install uv
+
+# Python 서버 폴더로 이동
+cd python-server
+
+# 의존성 설치 (uv 사용)
+uv pip install -r requirements.txt
+```
+
+#### 방법 B: pip + 가상환경 사용
+```powershell
+# Python 서버 폴더로 이동
+cd python-server
+
+# 가상환경 생성
+python -m venv .venv
+
+# 가상환경 활성화 (Windows PowerShell)
+./.venv/Scripts/Activate.ps1
+
+# 의존성 설치
+uv pip install -r requirements.txt
 ```
 
 ### 4단계: Python 서버 실행
 ```powershell
-# 서버 실행 (개발 모드)
-python run.py
+# python-server 폴더에서 실행
+uv run -m uvicorn main:app --host 127.0.0.1 --port 8000 --reload
 ```
 
-또는 직접 실행:
+또는 가상환경을 사용하는 경우:
 ```powershell
-uvicorn app.main:app --host 127.0.0.1 --port 8000 --reload
+cd python-server
+./.venv/Scripts/Activate.ps1
+python -m uvicorn main:app --host 127.0.0.1 --port 8000 --reload
+```
+
+서버가 성공적으로 실행되면 다음과 같은 메시지가 표시됩니다:
+```
+INFO:     Uvicorn running on http://127.0.0.1:8000 (Press CTRL+C to quit)
+INFO:     Started reloader process
+INFO:     Started server process
+INFO:     Waiting for application startup.
+INFO:     Application startup complete.
 ```
 
 ### 5단계: VS Code 확장 실행
-1. VS Code에서 `vscode-Python Security Analyzer` (또는 `vscode-extension`) 폴더 열기
-2. `F5` 키를 눌러 Extension Development Host 실행
-3. 새 창에서 명령 팔레트 (`Ctrl+Shift+P`) 열기
-4. "Python Security" 명령어들 사용
+
+#### 5-1. 확장 개발 환경 실행
+1. VS Code에서 프로젝트 루트 폴더(`vscode-extension`)를 엽니다
+2. `F5` 키로 Extension Development Host 실행 (또는 `Ctrl+Shift+P` → "Debug: Start Debugging")
+3. 새로운 "Extension Development Host" 창이 열립니다
+
+#### 5-2. 확장 사용하기
+1. Extension Development Host 창에서 `Ctrl+Shift+P` (명령 팔레트)
+2. "Zip folder and upload to Python server" 명령 실행
+3. 압축할 폴더 선택
+4. 응답 ZIP을 저장할 경로 선택
+
+## 🔧 개발 모드 실행
+
+### TypeScript 컴파일 (자동 감시)
+```powershell
+# 프로젝트 루트에서 실행
+npm run watch
+```
+
+### 수동 컴파일
+```powershell
+npm run compile
+```
+
+### 확장 패키징
+```powershell
+npm run package
+```
 
 ## 📁 프로젝트 구조
 ```
-pypi_mal-vul_finder/
-├── vscode-extension/              # VS Code 확장
-│   ├── src/
-│   │   └── extension.ts          # 확장 메인 코드
-│   ├── package.json              # Node.js 의존성
-│   └── tsconfig.json            # TypeScript 설정
-├── server/                       # Python 분석 서버
-│   ├── app/
-│   │   ├── main.py              # FastAPI 서버
-│   │   └── services/            # 서비스 로직
-│   ├── analysis/                # AI 분석 모듈
-│   │   ├── bert_analyzer.py     # BERT 기반 분석
-│   │   └── integrated_lstm_analyzer.py  # LSTM 기반 분석
-│   ├── models/                  # AI 모델 파일들
-│   │   ├── bert_mal/           # BERT 악성코드 모델
-│   │   ├── bert_vul/           # BERT 취약점 모델
-│   │   └── lstm/               # LSTM 모델들
-│   └── requirements.txt         # Python 의존성
-├── codebert_mal/                # BERT 악성코드 분석
-├── codebert_test2/              # BERT 취약점 분석
-├── safepy_3/                    # LSTM 취약점 분석
-├── safepy_3_malicious/          # LSTM 악성코드 분석
-└── safepy_3_malicious_ML/       # 통합 ML 분석
+vscode-extension/
+├── src/
+│   └── extension.ts          # VS Code 확장 메인 코드
+├── python-server/
+│   ├── main.py              # FastAPI 서버 메인 코드
+│   ├── requirements.txt     # Python 의존성
+│   └── uploads/             # 업로드된 파일 저장소
+├── out/                     # 컴파일된 JavaScript 파일
+├── package.json             # Node.js 의존성 및 설정
+└── tsconfig.json           # TypeScript 설정
 ```
-
-## 🎯 사용 가능한 명령어
-
-### VS Code 확장 명령어들:
-1. **Python Security: 프로젝트 분석 (통합 - 취약점 + 악성코드)**
-   - 현재 워크스페이스의 Python 파일들을 분석
-
-2. **Python Security: 설치된 패키지 분석 (통합 - 취약점 + 악성코드)**
-   - pip로 설치된 패키지들을 분석
-
-3. **Python Security: 프로젝트 분석 (취약점만)**
-   - 취약점 탐지만 수행
-
-4. **Python Security: 프로젝트 분석 (악성코드만)**
-   - 악성코드 탐지만 수행
-
-5. **Python Security: 설치된 패키지 분석 (취약점만)**
-   - 설치된 패키지의 취약점만 분석
-
-6. **Python Security: 설치된 패키지 분석 (악성코드만)**
-   - 설치된 패키지의 악성코드만 분석
 
 ## 🌐 API 엔드포인트
 - **서버 주소**: `http://127.0.0.1:8000`
-- **업로드 엔드포인트 (확장 기본값)**:
-  - 통합: `POST /api/v1/upload/lstm`
-  - 취약점 전용: `POST /api/v1/upload/lstm/vul`
-  - 악성코드 전용: `POST /api/v1/upload/lstm/mal`
-- **세션 대시보드**: `http://127.0.0.1:8000/session/{session_id}`
+- **업로드 엔드포인트**: `POST /upload`
+- **파라미터**: `file` (multipart/form-data)
 
 ## 🐛 문제 해결
 
@@ -142,60 +153,31 @@ pypi_mal-vul_finder/
    ```
 2. 다른 포트 사용:
    ```powershell
-   uvicorn app.main:app --host 127.0.0.1 --port 8001 --reload
+   uvicorn main:app --host 127.0.0.1 --port 8001 --reload
    ```
 
 ### VS Code 확장이 작동하지 않는 경우
-1. "Activating extension ... failed: Cannot find module .../out/extension.js" 오류가 뜨는 경우:
+1. TypeScript 컴파일 확인:
    ```powershell
-   # PowerShell에서 빌드 (out/extension.js 생성)
-   cd .\vscode-Python Security Analyzer
-   npm install
-   npm run build
-
-   cd ..\vscode-extension
-   npm install
-   npm run build
-   ```
-   - 이후 VS Code에서 `Ctrl+Shift+P` → "Developer: Reload Window" 실행
-2. TypeScript 컴파일 수동 확인:
-   ```powershell
-   cd vscode-extension
    npm run compile
    ```
-3. Extension Development Host 창에서 개발자 도구 확인:
+2. Extension Development Host 창에서 개발자 도구 확인:
    - `Help` → `Toggle Developer Tools`
 
 ### 의존성 설치 오류
 1. Node.js 버전 확인 (18.x 이상 권장)
-2. Python 버전 확인 (3.8 이상, 3.12 미만)
+2. Python 버전 확인 (3.8 이상 권장)
 3. 관리자 권한으로 PowerShell 실행
-4. torch 버전 충돌 시:
-   ```powershell
-   pip install torch==2.1.2 --force-reinstall
-   ```
 
-### AI 모델 파일 누락
-- `server/models/` 폴더에 필요한 모델 파일들이 있는지 확인
-- 각 분석 모듈별로 해당 모델 파일이 필요합니다
-
-## 📊 분석 결과 확인
-1. 분석 완료 후 대시보드 URL이 표시됩니다
-2. 브라우저에서 대시보드 열기 클릭
-3. 세션 ID로 상세 결과 확인 가능
-4. CSV/JSON 형태로 결과 다운로드 가능
-
-## 🔧 개발자 정보
-- **VS Code 확장 ID**: `python-security-analyzer`
-- **서버 재시작**: `--reload` 옵션으로 파일 변경 시 자동 재시작
+## 📝 추가 정보
+- **VS Code 확장 ID**: `vscode-extension.uploadZipToLocal`
+- **서버 재시작**: Python 서버는 `--reload` 옵션으로 파일 변경 시 자동 재시작
 - **로그 확인**: VS Code 개발자 도구 콘솔에서 확장 로그 확인 가능
-- **모델 업데이트**: `server/models/` 폴더의 모델 파일 교체
 
-## 🎉 완료!
-이제 Python Security Analyzer를 성공적으로 설치하고 실행할 수 있습니다!
+## 🎯 사용 시나리오
+1. VS Code에서 작업 중인 프로젝트 폴더 선택
+2. 확장 명령 실행으로 ZIP 압축 및 서버 업로드
+3. Python 서버에서 파일 처리 후 응답 ZIP 다운로드
+4. 로컬에 응답 파일 저장
 
-분석을 시작하려면:
-1. Python 서버 실행 (`python run.py`)
-2. VS Code에서 F5로 확장 실행
-3. 명령 팔레트에서 "Python Security" 명령어 선택
-4. 분석할 프로젝트 또는 패키지 선택
+이제 프로젝트를 성공적으로 설치하고 실행할 수 있습니다! 🎉

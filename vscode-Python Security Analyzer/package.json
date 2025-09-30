@@ -10,13 +10,6 @@
   "categories": [
     "Other"
   ],
-  "keywords": [
-    "python",
-    "security",
-    "analysis",
-    "vulnerability",
-    "malware"
-  ],
   "activationEvents": [
     "onStartupFinished"
   ],
@@ -25,60 +18,41 @@
     "commands": [
       {
         "command": "vscode-extension.uploadZipToLocal",
-        "title": "Python Security: 프로젝트 분석 (통합 - 취약점 + 악성코드)",
-        "category": "Python Security"
+        "title": "Python Security: 기본 분석 (취약+악성)"
       },
       {
         "command": "vscode-extension.extractPythonPackages",
-        "title": "Python Security: 설치된 패키지 분석 (통합 - 취약점 + 악성코드)",
-        "category": "Python Security"
+        "title": "Python Security: 설치 패키지 분석 (ML)"
       },
       {
-        "command": "vscode-extension.analyzeProjectVulnerability",
-        "title": "Python Security: 프로젝트 분석 (취약점만)",
-        "category": "Python Security"
+        "command": "vscode-extension.upload.lstm",
+        "title": "Python Security: LSTM 통합 분석 (취약+악성)"
       },
       {
-        "command": "vscode-extension.analyzeProjectMalicious",
-        "title": "Python Security: 프로젝트 분석 (악성코드만)",
-        "category": "Python Security"
+        "command": "vscode-extension.upload.lstm.mal",
+        "title": "Python Security: LSTM 악성만 분석"
       },
       {
-        "command": "vscode-extension.analyzePackagesVulnerability",
-        "title": "Python Security: 설치된 패키지 분석 (취약점만)",
-        "category": "Python Security"
+        "command": "vscode-extension.upload.lstm.vul",
+        "title": "Python Security: LSTM 취약점만 분석"
       },
       {
-        "command": "vscode-extension.analyzePackagesMalicious",
-        "title": "Python Security: 설치된 패키지 분석 (악성코드만)",
-        "category": "Python Security"
+        "command": "vscode-extension.upload.bert",
+        "title": "Python Security: BERT 통합 분석 (취약+악성)"
+      },
+      {
+        "command": "vscode-extension.upload.bert.mal",
+        "title": "Python Security: BERT 악성만 분석"
+      },
+      {
+        "command": "vscode-extension.upload.bert.vul",
+        "title": "Python Security: BERT 취약점만 분석"
+      },
+      {
+        "command": "vscode-extension.upload.ml",
+        "title": "Python Security: ML 패키지 분석 (LSTM+XGBoost)"
       }
-    ],
-    "menus": {
-      "commandPalette": [
-        {
-          "command": "vscode-extension.uploadZipToLocal",
-          "when": "workspaceFolderCount > 0"
-        },
-        {
-          "command": "vscode-extension.extractPythonPackages"
-        },
-        {
-          "command": "vscode-extension.analyzeProjectVulnerability",
-          "when": "workspaceFolderCount > 0"
-        },
-        {
-          "command": "vscode-extension.analyzeProjectMalicious",
-          "when": "workspaceFolderCount > 0"
-        },
-        {
-          "command": "vscode-extension.analyzePackagesVulnerability"
-        },
-        {
-          "command": "vscode-extension.analyzePackagesMalicious"
-        }
-      ]
-    }
+    ]
   },
   "scripts": {
     "compile": "tsc -p ./",

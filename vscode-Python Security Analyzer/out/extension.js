@@ -93,27 +93,19 @@ async function createPythonOnlyZipFromFolder(folderPath) {
         throw error;
     }
 }
-async function uploadZipToPythonServer(zipPath, analysisType = 'integrated') {
+async function uploadZipToPythonServer(zipPath) {
+    return uploadZipToEndpoint(zipPath, '/api/v1/upload');
+}
+async function uploadZipToEndpoint(zipPath, endpoint) {
     const form = new form_data_1.default();
     form.append('file', fs.createReadStream(zipPath), path.basename(zipPath));
-    // 새로운 API 엔드포인트에 맞게 URL 설정
-    let apiUrl = 'http://127.0.0.1:8000/api/v1/upload/lstm'; // 기본: both (취약점 + 악성코드)
-    if (analysisType === 'vulnerability') {
-        apiUrl = 'http://127.0.0.1:8000/api/v1/upload/lstm/vul';
-    }
-    else if (analysisType === 'malicious') {
-        apiUrl = 'http://127.0.0.1:8000/api/v1/upload/lstm/mal';
-    }
-    const response = await axios_1.default.post(apiUrl, form, {
+    const url = `http://127.0.0.1:8000${endpoint}`;
+    const response = await axios_1.default.post(url, form, {
         headers: form.getHeaders(),
         maxContentLength: Infinity,
-        maxBodyLength: Infinity,
-        timeout: 30000 // 30초 타임아웃
+        maxBodyLength: Infinity
     });
-    // 응답에서 dashboard_url 생성
-    const result = response.data;
-    result.dashboard_url = `http://127.0.0.1:8000/session/${result.session_id}`;
-    return result;
+    return response.data;
 }
 async function getPythonSitePackagesPath() {
     try {
@@ -152,7 +144,7 @@ async function getInstalledPackages() {
 async function getInstalledPackagesFromTable() {
     try {
         const { stdout } = await execAsync('pip list');
-        const lines = stdout.split('\n').map((l) => l.trim()).filter(Boolean);
+        const lines = stdout.split('\n').map(l => l.trim()).filter(Boolean);
         const results = [];
         for (let i = 0; i < lines.length; i++) {
             const line = lines[i];
@@ -245,7 +237,7 @@ async function createPythonPackagesZip() {
             const pipShowInfo = await getPipShowInfo(packageName);
             fs.writeFileSync(path.join(metadataDir, `${packageName}.txt`), pipShowInfo);
             if (fileCount > 0) {
-                // console.log(`Extracted ${fileCount} files from ${packageName}`);
+                console.log(`Extracted ${fileCount} files from ${packageName}`);
             }
         }
         // versions.txt based on default `pip list` table output (write at root)
@@ -275,19 +267,36 @@ async function createPythonPackagesZip() {
     }
 }
 function activate(context) {
-    // Helper function to handle analysis with specific type
-    async function performAnalysis(createZipFunction, analysisType, analysisName) {
+    // Original command: Zip folder and upload (Python files only)
+    const disposable1 = vscode.commands.registerCommand('vscode-extension.uploadZipToLocal', async () => {
         try {
-            vscode.window.showInformationMessage(`${analysisName} 분석을 시작합니다...`);
-            const zipPath = await createZipFunction();
-            const result = await uploadZipToPythonServer(zipPath, analysisType);
-            const analysisTypeText = {
-                'integrated': '통합 (취약점 + 악성코드)',
-                'vulnerability': '취약점',
-                'malicious': '악성코드'
-            }[analysisType];
-            const statusMessage = `${analysisTypeText} 분석이 시작되었습니다!`;
-            vscode.window.showInformationMessage(`${statusMessage} 세션 ID: ${result.session_id}`, '대시보드 열기').then((selection) => {
+            const workspaceFolder = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
+            if (!workspaceFolder) {
+                vscode.window.showErrorMessage('워크스페이스 폴더가 없습니다. 폴더를 열고 다시 시도하세요.');
+                return;
+            }
+            vscode.window.showInformationMessage('Python 파일들을 압축하고 서버로 전송 중...');
+            const zipPath = await createPythonOnlyZipFromFolder(workspaceFolder);
+            const result = await uploadZipToPythonServer(zipPath);
+            vscode.window.showInformationMessage(`업로드 완료! 세션 ID: ${result.session_id}`, '대시보드 열기').then(selection => {
+                if (selection === '대시보드 열기') {
+                    vscode.env.openExternal(vscode.Uri.parse(result.dashboard_url));
+                }
+            });
+            fs.unlinkSync(zipPath);
+        }
+        catch (error) {
+            const message = error?.message ?? String(error);
+            vscode.window.showErrorMessage(`Upload failed: ${message}`);
+        }
+    });
+    // New command: Extract Python packages and upload (ML endpoint)
+    const disposable2 = vscode.commands.registerCommand('vscode-extension.extractPythonPackages', async () => {
+        try {
+            vscode.window.showInformationMessage('Python 패키지 소스코드 추출을 시작합니다...');
+            const zipPath = await createPythonPackagesZip();
+            const result = await uploadZipToEndpoint(zipPath, '/api/v1/upload/ML');
+            vscode.window.showInformationMessage(`Python 패키지 업로드 완료! 세션 ID: ${result.session_id}`, '대시보드 열기').then(selection => {
                 if (selection === '대시보드 열기') {
                     vscode.env.openExternal(vscode.Uri.parse(result.dashboard_url));
                 }
@@ -299,57 +308,162 @@ function activate(context) {
             if (message.includes('Permission denied')) {
                 vscode.window.showErrorMessage('권한이 부족합니다. VS Code를 관리자 권한으로 실행해주세요.');
             }
-            else if (message.includes('timeout')) {
-                vscode.window.showErrorMessage('서버 연결 시간이 초과되었습니다. 서버가 실행 중인지 확인해주세요.');
-            }
-            else if (message.includes('ECONNREFUSED')) {
-                vscode.window.showErrorMessage('서버에 연결할 수 없습니다. 서버가 실행 중인지 확인해주세요.');
-            }
             else {
-                vscode.window.showErrorMessage(`${analysisName} 분석 실패: ${message}`);
+                vscode.window.showErrorMessage(`Python packages extraction failed: ${message}`);
             }
         }
-    }
-    // 1. 통합 분석 - 프로젝트
-    const disposable1 = vscode.commands.registerCommand('vscode-extension.uploadZipToLocal', async () => {
-        const workspaceFolder = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
-        if (!workspaceFolder) {
-            vscode.window.showErrorMessage('워크스페이스 폴더가 없습니다. 폴더를 열고 다시 시도하세요.');
-            return;
+    });
+    // New commands: Explicit upload routes for LSTM/BERT/ML
+    const disposableLstm = vscode.commands.registerCommand('vscode-extension.upload.lstm', async () => {
+        try {
+            const workspaceFolder = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
+            if (!workspaceFolder) {
+                vscode.window.showErrorMessage('워크스페이스 폴더가 없습니다. 폴더를 열고 다시 시도하세요.');
+                return;
+            }
+            vscode.window.showInformationMessage('LSTM 통합 분석을 위한 ZIP 생성 중...');
+            const zipPath = await createPythonOnlyZipFromFolder(workspaceFolder);
+            const result = await uploadZipToEndpoint(zipPath, '/api/v1/upload/lstm');
+            vscode.window.showInformationMessage(`업로드 완료 (LSTM 통합)! 세션 ID: ${result.session_id}`, '대시보드 열기').then(selection => {
+                if (selection === '대시보드 열기') {
+                    vscode.env.openExternal(vscode.Uri.parse(result.dashboard_url));
+                }
+            });
+            fs.unlinkSync(zipPath);
         }
-        await performAnalysis(() => createPythonOnlyZipFromFolder(workspaceFolder), 'integrated', '프로젝트 통합');
-    });
-    // 2. 통합 분석 - 설치된 패키지
-    const disposable2 = vscode.commands.registerCommand('vscode-extension.extractPythonPackages', async () => {
-        await performAnalysis(() => createPythonPackagesZip(), 'integrated', '설치된 패키지 통합');
-    });
-    // 3. 취약점 분석 - 프로젝트
-    const disposable3 = vscode.commands.registerCommand('vscode-extension.analyzeProjectVulnerability', async () => {
-        const workspaceFolder = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
-        if (!workspaceFolder) {
-            vscode.window.showErrorMessage('워크스페이스 폴더가 없습니다. 폴더를 열고 다시 시도하세요.');
-            return;
+        catch (error) {
+            const message = error?.message ?? String(error);
+            vscode.window.showErrorMessage(`LSTM 업로드 실패: ${message}`);
         }
-        await performAnalysis(() => createPythonOnlyZipFromFolder(workspaceFolder), 'vulnerability', '프로젝트 취약점');
     });
-    // 4. 악성 분석 - 프로젝트
-    const disposable4 = vscode.commands.registerCommand('vscode-extension.analyzeProjectMalicious', async () => {
-        const workspaceFolder = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
-        if (!workspaceFolder) {
-            vscode.window.showErrorMessage('워크스페이스 폴더가 없습니다. 폴더를 열고 다시 시도하세요.');
-            return;
+    const disposableLstmMal = vscode.commands.registerCommand('vscode-extension.upload.lstm.mal', async () => {
+        try {
+            const workspaceFolder = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
+            if (!workspaceFolder) {
+                vscode.window.showErrorMessage('워크스페이스 폴더가 없습니다. 폴더를 열고 다시 시도하세요.');
+                return;
+            }
+            vscode.window.showInformationMessage('LSTM 악성 전용 분석 ZIP 생성 중...');
+            const zipPath = await createPythonOnlyZipFromFolder(workspaceFolder);
+            const result = await uploadZipToEndpoint(zipPath, '/api/v1/upload/lstm/mal');
+            vscode.window.showInformationMessage(`업로드 완료 (LSTM 악성)! 세션 ID: ${result.session_id}`, '대시보드 열기').then(selection => {
+                if (selection === '대시보드 열기') {
+                    vscode.env.openExternal(vscode.Uri.parse(result.dashboard_url));
+                }
+            });
+            fs.unlinkSync(zipPath);
         }
-        await performAnalysis(() => createPythonOnlyZipFromFolder(workspaceFolder), 'malicious', '프로젝트 악성');
+        catch (error) {
+            const message = error?.message ?? String(error);
+            vscode.window.showErrorMessage(`LSTM 악성 업로드 실패: ${message}`);
+        }
     });
-    // 5. 취약점 분석 - 설치된 패키지
-    const disposable5 = vscode.commands.registerCommand('vscode-extension.analyzePackagesVulnerability', async () => {
-        await performAnalysis(() => createPythonPackagesZip(), 'vulnerability', '설치된 패키지 취약점');
+    const disposableLstmVul = vscode.commands.registerCommand('vscode-extension.upload.lstm.vul', async () => {
+        try {
+            const workspaceFolder = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
+            if (!workspaceFolder) {
+                vscode.window.showErrorMessage('워크스페이스 폴더가 없습니다. 폴더를 열고 다시 시도하세요.');
+                return;
+            }
+            vscode.window.showInformationMessage('LSTM 취약점 전용 분석 ZIP 생성 중...');
+            const zipPath = await createPythonOnlyZipFromFolder(workspaceFolder);
+            const result = await uploadZipToEndpoint(zipPath, '/api/v1/upload/lstm/vul');
+            vscode.window.showInformationMessage(`업로드 완료 (LSTM 취약점)! 세션 ID: ${result.session_id}`, '대시보드 열기').then(selection => {
+                if (selection === '대시보드 열기') {
+                    vscode.env.openExternal(vscode.Uri.parse(result.dashboard_url));
+                }
+            });
+            fs.unlinkSync(zipPath);
+        }
+        catch (error) {
+            const message = error?.message ?? String(error);
+            vscode.window.showErrorMessage(`LSTM 취약 업로드 실패: ${message}`);
+        }
     });
-    // 6. 악성 분석 - 설치된 패키지
-    const disposable6 = vscode.commands.registerCommand('vscode-extension.analyzePackagesMalicious', async () => {
-        await performAnalysis(() => createPythonPackagesZip(), 'malicious', '설치된 패키지 악성');
+    const disposableBert = vscode.commands.registerCommand('vscode-extension.upload.bert', async () => {
+        try {
+            const workspaceFolder = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
+            if (!workspaceFolder) {
+                vscode.window.showErrorMessage('워크스페이스 폴더가 없습니다. 폴더를 열고 다시 시도하세요.');
+                return;
+            }
+            vscode.window.showInformationMessage('BERT 통합 분석을 위한 ZIP 생성 중...');
+            const zipPath = await createPythonOnlyZipFromFolder(workspaceFolder);
+            const result = await uploadZipToEndpoint(zipPath, '/api/v1/upload/bert');
+            vscode.window.showInformationMessage(`업로드 완료 (BERT 통합)! 세션 ID: ${result.session_id}`, '대시보드 열기').then(selection => {
+                if (selection === '대시보드 열기') {
+                    vscode.env.openExternal(vscode.Uri.parse(result.dashboard_url));
+                }
+            });
+            fs.unlinkSync(zipPath);
+        }
+        catch (error) {
+            const message = error?.message ?? String(error);
+            vscode.window.showErrorMessage(`BERT 업로드 실패: ${message}`);
+        }
     });
-    context.subscriptions.push(disposable1, disposable2, disposable3, disposable4, disposable5, disposable6);
+    const disposableBertMal = vscode.commands.registerCommand('vscode-extension.upload.bert.mal', async () => {
+        try {
+            const workspaceFolder = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
+            if (!workspaceFolder) {
+                vscode.window.showErrorMessage('워크스페이스 폴더가 없습니다. 폴더를 열고 다시 시도하세요.');
+                return;
+            }
+            vscode.window.showInformationMessage('BERT 악성 전용 분석 ZIP 생성 중...');
+            const zipPath = await createPythonOnlyZipFromFolder(workspaceFolder);
+            const result = await uploadZipToEndpoint(zipPath, '/api/v1/upload/bert/mal');
+            vscode.window.showInformationMessage(`업로드 완료 (BERT 악성)! 세션 ID: ${result.session_id}`, '대시보드 열기').then(selection => {
+                if (selection === '대시보드 열기') {
+                    vscode.env.openExternal(vscode.Uri.parse(result.dashboard_url));
+                }
+            });
+            fs.unlinkSync(zipPath);
+        }
+        catch (error) {
+            const message = error?.message ?? String(error);
+            vscode.window.showErrorMessage(`BERT 악성 업로드 실패: ${message}`);
+        }
+    });
+    const disposableBertVul = vscode.commands.registerCommand('vscode-extension.upload.bert.vul', async () => {
+        try {
+            const workspaceFolder = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
+            if (!workspaceFolder) {
+                vscode.window.showErrorMessage('워크스페이스 폴더가 없습니다. 폴더를 열고 다시 시도하세요.');
+                return;
+            }
+            vscode.window.showInformationMessage('BERT 취약점 전용 분석 ZIP 생성 중...');
+            const zipPath = await createPythonOnlyZipFromFolder(workspaceFolder);
+            const result = await uploadZipToEndpoint(zipPath, '/api/v1/upload/bert/vul');
+            vscode.window.showInformationMessage(`업로드 완료 (BERT 취약점)! 세션 ID: ${result.session_id}`, '대시보드 열기').then(selection => {
+                if (selection === '대시보드 열기') {
+                    vscode.env.openExternal(vscode.Uri.parse(result.dashboard_url));
+                }
+            });
+            fs.unlinkSync(zipPath);
+        }
+        catch (error) {
+            const message = error?.message ?? String(error);
+            vscode.window.showErrorMessage(`BERT 취약 업로드 실패: ${message}`);
+        }
+    });
+    const disposableML = vscode.commands.registerCommand('vscode-extension.upload.ml', async () => {
+        try {
+            vscode.window.showInformationMessage('ML 패키지 분석을 위한 패키지 ZIP 생성 중...');
+            const zipPath = await createPythonPackagesZip();
+            const result = await uploadZipToEndpoint(zipPath, '/api/v1/upload/ML');
+            vscode.window.showInformationMessage(`업로드 완료 (ML 패키지)! 세션 ID: ${result.session_id}`, '대시보드 열기').then(selection => {
+                if (selection === '대시보드 열기') {
+                    vscode.env.openExternal(vscode.Uri.parse(result.dashboard_url));
+                }
+            });
+            fs.unlinkSync(zipPath);
+        }
+        catch (error) {
+            const message = error?.message ?? String(error);
+            vscode.window.showErrorMessage(`ML 업로드 실패: ${message}`);
+        }
+    });
+    context.subscriptions.push(disposable1, disposable2, disposableLstm, disposableLstmMal, disposableLstmVul, disposableBert, disposableBertMal, disposableBertVul, disposableML);
 }
 function deactivate() { }
 //# sourceMappingURL=extension.js.map

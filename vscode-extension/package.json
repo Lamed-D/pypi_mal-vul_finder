@@ -1,7 +1,7 @@
 {
-  "name": "python-security-analyzer",
-  "displayName": "Python Security Analyzer",
-  "description": "Python 코드 보안 분석을 위한 VS Code Extension. 프로젝트를 ZIP으로 압축하여 AI 기반 보안 분석 서버로 전송합니다.",
+  "name": "zip-uploader",
+  "displayName": "Zip Uploader",
+  "description": "선택한 폴더를 ZIP으로 압축해 로컬 Python 서버로 업로드하고, 응답 ZIP을 저장합니다.",
   "version": "0.1.0",
   "publisher": "lamed",
   "engines": {
@@ -18,11 +18,11 @@
     "commands": [
       {
         "command": "vscode-extension.uploadZipToLocal",
-        "title": "Python Security: Analyze Project"
+        "title": "Zip folder and upload to Python server"
       },
       {
         "command": "vscode-extension.extractPythonPackages",
-        "title": "Python Security: Analyze Installed Packages"
+        "title": "Extract Python packages and upload to server"
       }
     ]
   },

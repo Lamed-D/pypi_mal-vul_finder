@@ -64,15 +64,14 @@ async function createPythonOnlyZipFromFolder(folderPath: string): Promise<string
   }
 }
 
-async function uploadZipToPythonServer(zipPath: string): Promise<{session_id: string, dashboard_url: string}> {
+async function uploadZipToPythonServer(zipPath: string): Promise<void> {
   const form = new FormData();
   form.append('file', fs.createReadStream(zipPath), path.basename(zipPath));
-  const response = await axios.post('http://127.0.0.1:8000/upload', form, {
+  await axios.post('http://127.0.0.1:8000/upload', form, {
     headers: form.getHeaders(),
     maxContentLength: Infinity,
     maxBodyLength: Infinity
   });
-  return response.data;
 }
 
 async function getPythonSitePackagesPath(): Promise<string> {
@@ -265,20 +264,9 @@ export function activate(context: vscode.ExtensionContext) {
         vscode.window.showErrorMessage('워크스페이스 폴더가 없습니다. 폴더를 열고 다시 시도하세요.');
         return;
       }
-      
-      vscode.window.showInformationMessage('Python 파일들을 압축하고 서버로 전송 중...');
       const zipPath = await createPythonOnlyZipFromFolder(workspaceFolder);
-      const result = await uploadZipToPythonServer(zipPath);
-      
-      vscode.window.showInformationMessage(
-        `업로드 완료! 세션 ID: ${result.session_id}`,
-        '대시보드 열기'
-      ).then(selection => {
-        if (selection === '대시보드 열기') {
-          vscode.env.openExternal(vscode.Uri.parse(result.dashboard_url));
-        }
-      });
-      
+      await uploadZipToPythonServer(zipPath);
+      vscode.window.showInformationMessage('업로드 완료: Python 파일들만 서버로 전송되었습니다.');
       fs.unlinkSync(zipPath);
     } catch (error: any) {
       const message = error?.message ?? String(error);
@@ -292,17 +280,9 @@ export function activate(context: vscode.ExtensionContext) {
       vscode.window.showInformationMessage('Python 패키지 소스코드 추출을 시작합니다...');
       
       const zipPath = await createPythonPackagesZip();
-      const result = await uploadZipToPythonServer(zipPath);
+      await uploadZipToPythonServer(zipPath);
       
-      vscode.window.showInformationMessage(
-        `Python 패키지 업로드 완료! 세션 ID: ${result.session_id}`,
-        '대시보드 열기'
-      ).then(selection => {
-        if (selection === '대시보드 열기') {
-          vscode.env.openExternal(vscode.Uri.parse(result.dashboard_url));
-        }
-      });
-      
+      vscode.window.showInformationMessage('Python 패키지 소스코드 및 pip show 정보 업로드 완료!');
       fs.unlinkSync(zipPath);
     } catch (error: any) {
       const message = error?.message ?? String(error);
