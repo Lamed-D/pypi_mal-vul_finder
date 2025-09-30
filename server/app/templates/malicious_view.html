@@ -262,6 +262,19 @@
                                                 <span class="badge bg-success">Safe</span>
                                             </div>
                                             <small class="text-muted">확률: {{ "%.1f"|format(file.malicious_probability * 100) }}%</small>
+                                            <div class="mt-3">
+                                                <div class="progress" style="height: 20px;">
+                                                    <div class="progress-bar progress-bar-striped progress-bar-animated bg-success" 
+                                                         role="progressbar"
+                                                         id="malicious-safe-progress-{{ loop.index }}"
+                                                         style="width: 0%; background-color: #28a745;"
+                                                         data-progress="{{ (file.malicious_probability * 100)|round(1) }}"
+                                                         aria-valuenow="{{ (file.malicious_probability * 100)|round(1) }}"
+                                                         aria-valuemin="0" aria-valuemax="100">
+                                                        <span style="color: white; font-weight: bold; font-size: 0.8em;">{{ "%.1f"|format(file.malicious_probability * 100) }}%</span>
+                                                    </div>
+                                                </div>
+                                            </div>
                                             <div class="text-center mt-2">
                                                 <small class="text-muted">
                                                     <i class="fas fa-mouse-pointer me-1"></i>클릭하여 소스코드 보기
@@ -346,6 +359,14 @@
                 setTimeout(() => {
                     bar.style.width = targetWidth + '%';
                 }, index * 100); // 각 바를 100ms씩 지연시켜 순차적으로 애니메이션
+            });
+
+            const safeBars = document.querySelectorAll('[id^="malicious-safe-progress-"]');
+            safeBars.forEach((bar, index) => {
+                const targetWidth = bar.getAttribute('data-progress');
+                setTimeout(() => {
+                    bar.style.width = targetWidth + '%';
+                }, index * 100);
             });
         }
 
