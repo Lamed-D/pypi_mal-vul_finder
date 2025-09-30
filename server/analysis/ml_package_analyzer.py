@@ -796,7 +796,7 @@ class MLPackageAnalyzer:
             results_list = []
             for _, row in comprehensive_results.iterrows():
                 result_item = {
-                    "name": row.get("package_name", ""),
+                    "name": row.get("name", ""),
                     "summary": row.get("summary", ""),
                     "author": row.get("author", ""),
                     "author-email": row.get("author-email", ""),

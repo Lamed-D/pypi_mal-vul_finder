@@ -242,6 +242,21 @@ def init_database():
                     print("✅ is_ml column already exists")
         except Exception as e:
             print(f"⚠️ Error adding is_ml column: {e}")
+
+        # pkg_vul_analysis 테이블에 package_name 컬럼 존재 보장
+        try:
+            with engine.connect() as conn:
+                result = conn.execute("PRAGMA table_info(pkg_vul_analysis)")
+                pkg_columns = [row[1] for row in result.fetchall()]
+                if 'package_name' not in pkg_columns:
+                    print("🔧 Adding package_name column to pkg_vul_analysis table...")
+                    conn.execute("ALTER TABLE pkg_vul_analysis ADD COLUMN package_name TEXT")
+                    conn.commit()
+                    print("✅ package_name column added successfully")
+                else:
+                    print("✅ package_name column already exists in pkg_vul_analysis")
+        except Exception as e:
+            print(f"⚠️ Error ensuring package_name column on pkg_vul_analysis: {e}")
         
         print("✅ Integrated database initialized successfully")
         print(f"📁 Database file: {DB_PATH}")
