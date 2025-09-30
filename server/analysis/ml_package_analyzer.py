@@ -33,6 +33,7 @@ from typing import Optional, Dict, List, Tuple, Any
 from collections import Counter
 from sklearn.preprocessing import StandardScaler, MinMaxScaler
 from pathlib import Path
+import shutil
 
 # TensorFlow 경고 메시지 숨기기
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2'
@@ -79,11 +80,20 @@ class MLPackageAnalyzer:
         if models_dir:
             self.models_dir = Path(models_dir)
         else:
-            # safepy_3_malicious_ML의 모델 디렉토리 사용
+            # 기본: 외부 원본(safepy_3_malicious_ML)
             self.models_dir = Path(__file__).parents[2] / "safepy_3_malicious_ML"
+
+        # 서버 로컬 모델 경로 (복사 대상)
+        self.server_models_root = Path(__file__).parents[1] / "models" / "ml_package"
+        self.server_model_dir = self.server_models_root / "model"
+        self.server_w2v_dir = self.server_models_root / "w2v"
         
-        self.model_save_dir = self.models_dir / "model"
-        self.w2v_dir = self.models_dir / "w2v"
+        # 우선 로컬(server) 모델 자산 존재 보장. 없으면 외부 원본에서 복사
+        self._ensure_local_assets()
+
+        # 모델/리소스 로드 경로는 우선 로컬(server)로 설정
+        self.model_save_dir = self.server_model_dir if self.server_model_dir.exists() else (self.models_dir / "model")
+        self.w2v_dir = self.server_w2v_dir if self.server_w2v_dir.exists() else (self.models_dir / "w2v")
         
         # 모델들
         self.lstm_model = None
@@ -98,6 +108,38 @@ class MLPackageAnalyzer:
         
         # 모델 로드
         self._load_models()
+
+    def _safe_copytree(self, src: Path, dst: Path):
+        """dst가 없을 때만 src 디렉토리를 dst로 복사합니다."""
+        try:
+            if src.exists() and not dst.exists():
+                dst.parent.mkdir(parents=True, exist_ok=True)
+                shutil.copytree(src, dst)
+        except Exception as e:
+            print(f"모델 디렉토리 복사 실패: {src} -> {dst} ({e})")
+
+    def _safe_copyfile(self, src: Path, dst: Path):
+        """dst가 없을 때만 src 파일을 dst로 복사합니다."""
+        try:
+            if src.exists() and not dst.exists():
+                dst.parent.mkdir(parents=True, exist_ok=True)
+                shutil.copy2(src, dst)
+        except Exception as e:
+            print(f"모델 파일 복사 실패: {src} -> {dst} ({e})")
+
+    def _ensure_local_assets(self) -> None:
+        """서버 로컬 경로에 모델/리소스를 복사해 두어 외부 디렉토리 없이도 동작하게 함."""
+        try:
+            source_model_dir = self.models_dir / "model"
+            source_w2v_dir = self.models_dir / "w2v"
+            # 디렉토리 복사 (존재 시 건너뜀)
+            self._safe_copytree(source_model_dir, self.server_model_dir)
+            self._safe_copytree(source_w2v_dir, self.server_w2v_dir)
+            # 추가 개별 파일 (xgboost 등)
+            self._safe_copyfile(self.models_dir / "xgboost_model.pkl", self.server_models_root / "xgboost_model.pkl")
+            # 라벨 인코더 등 pkl이 model 폴더 안에 있다면 위 디렉토리 복사로 해결됨
+        except Exception as e:
+            print(f"로컬 모델 자산 준비 중 오류: {e}")
     
     def _load_models(self):
         """모든 ML 모델 로드"""

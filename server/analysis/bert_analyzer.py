@@ -31,9 +31,15 @@ class BERTAnalyzer:
         self.models_dir = Path(models_dir)
         self.device = "cuda" if torch.cuda.is_available() else "cpu"
         
-        # 모델 경로 설정 (서버 내부 models 폴더 사용)
-        self.mal_model_path = self.models_dir / "bert_mal" / "codebert"
-        self.vul_model_path = self.models_dir / "bert_vul" / "codebert"
+        # 모델 경로 설정
+        # 1) 서버 내부 models 경로 우선
+        mal_server = self.models_dir / "bert_mal" / "codebert"
+        vul_server = self.models_dir / "bert_vul" / "codebert"
+        # 2) 서버에 없으면 원본 레포 경로로 폴백
+        mal_original = Path(__file__).parents[2] / "codebert_mal" / "model" / "codebert"
+        vul_original = Path(__file__).parents[2] / "codebert_test2" / "model" / "codebert"
+        self.mal_model_path = mal_server if mal_server.exists() else mal_original
+        self.vul_model_path = vul_server if vul_server.exists() else vul_original
         
         # 모델 및 토크나이저 초기화
         self.mal_tokenizer = None
@@ -43,24 +49,33 @@ class BERTAnalyzer:
         
         # 설정
         self.max_length = 512
-        self.stride = 128
+        # 원본 파이프라인과 일치하도록 stride 조정
+        self.stride = 64
         self.batch_size = 8
         self.threshold = 0.5
+        # 긍정 클래스 인덱스 (이진: 1, 다중: id2label 기반 추정)
+        self.mal_positive_index = 1
+        self.vul_positive_index = 1
         
         print(f"🔧 BERT Analyzer initialized on {self.device}")
         print(f"📁 Malicious model path: {self.mal_model_path}")
         print(f"📁 Vulnerability model path: {self.vul_model_path}")
         print(f"📁 Models directory: {self.models_dir}")
+        print(f"⚙️  Params - max_length={self.max_length}, stride={self.stride}, batch_size={self.batch_size}, threshold={self.threshold}")
     
     def load_malicious_model(self):
         """악성코드 분석 모델 로드"""
         try:
             if self.mal_model_path.exists():
                 self.mal_tokenizer = AutoTokenizer.from_pretrained(str(self.mal_model_path))
-                self.mal_model = AutoModelForSequenceClassification.from_pretrained(str(self.mal_model_path))
+                self.mal_model = AutoModelForSequenceClassification.from_pretrained(
+                    str(self.mal_model_path), ignore_mismatched_sizes=True
+                )
                 self.mal_model.to(self.device)
                 self.mal_model.eval()
-                print("✅ Malicious BERT model loaded successfully")
+                self.mal_positive_index = self._resolve_positive_index(self.mal_model, ["mal", "malicious"])  
+                id2label = getattr(self.mal_model.config, "id2label", None)
+                print(f"✅ Malicious BERT model loaded successfully (positive_index={self.mal_positive_index}, id2label={id2label})")
             else:
                 print(f"⚠️ Malicious model not found at {self.mal_model_path}")
         except Exception as e:
@@ -71,10 +86,14 @@ class BERTAnalyzer:
         try:
             if self.vul_model_path.exists():
                 self.vul_tokenizer = AutoTokenizer.from_pretrained(str(self.vul_model_path))
-                self.vul_model = AutoModelForSequenceClassification.from_pretrained(str(self.vul_model_path))
+                self.vul_model = AutoModelForSequenceClassification.from_pretrained(
+                    str(self.vul_model_path), ignore_mismatched_sizes=True
+                )
                 self.vul_model.to(self.device)
                 self.vul_model.eval()
-                print("✅ Vulnerability BERT model loaded successfully")
+                self.vul_positive_index = self._resolve_positive_index(self.vul_model, ["vul", "vulnerable", "vulnerability"])  
+                id2label = getattr(self.vul_model.config, "id2label", None)
+                print(f"✅ Vulnerability BERT model loaded successfully (positive_index={self.vul_positive_index}, id2label={id2label})")
             else:
                 print(f"⚠️ Vulnerability model not found at {self.vul_model_path}")
         except Exception as e:
@@ -90,6 +109,7 @@ class BERTAnalyzer:
             
             # 슬라이딩 윈도우로 청크 생성
             chunks = self._create_chunks(content)
+            print(f"🧩 [MAL] Created {len(chunks)} chunks (max_length={self.max_length}, stride={self.stride}) for {file_path}")
             
             if not chunks:
                 return {"is_malicious": False, "malicious_probability": 0.0, "malicious_status": "Safe", "malicious_label": "Safe"}
@@ -98,11 +118,12 @@ class BERTAnalyzer:
             probabilities = []
             for i in range(0, len(chunks), self.batch_size):
                 batch = chunks[i:i + self.batch_size]
-                batch_probs = self._predict_batch(batch, self.mal_tokenizer, self.mal_model)
+                batch_probs = self._predict_batch(batch, self.mal_tokenizer, self.mal_model, self.mal_positive_index)
                 probabilities.extend(batch_probs)
             
             # 파일 수준 확률 계산 (중앙 가중치 + 최댓값)
             file_probability = self._aggregate_probabilities(probabilities)
+            print(f"📈 [MAL] Aggregated probability={file_probability:.4f} (pos_idx={self.mal_positive_index})")
             
             # 악성 여부 판단
             is_malicious = file_probability > self.threshold
@@ -133,6 +154,7 @@ class BERTAnalyzer:
             
             # 슬라이딩 윈도우로 청크 생성
             chunks = self._create_chunks(content)
+            print(f"🧩 [VUL] Created {len(chunks)} chunks (max_length={self.max_length}, stride={self.stride}) for {file_path}")
             
             if not chunks:
                 return {"is_vulnerable": False, "vulnerability_probability": 0.0, "vulnerability_status": "Safe", "vulnerability_label": "Safe", "cwe_label": "Safe"}
@@ -141,11 +163,12 @@ class BERTAnalyzer:
             probabilities = []
             for i in range(0, len(chunks), self.batch_size):
                 batch = chunks[i:i + self.batch_size]
-                batch_probs = self._predict_batch(batch, self.vul_tokenizer, self.vul_model)
+                batch_probs = self._predict_batch(batch, self.vul_tokenizer, self.vul_model, self.vul_positive_index)
                 probabilities.extend(batch_probs)
             
             # 파일 수준 확률 계산
             file_probability = self._aggregate_probabilities(probabilities)
+            print(f"📈 [VUL] Aggregated probability={file_probability:.4f} (pos_idx={self.vul_positive_index})")
             
             # 취약점 여부 판단
             is_vulnerable = file_probability > self.threshold
@@ -186,7 +209,7 @@ class BERTAnalyzer:
         
         return chunks
     
-    def _predict_batch(self, chunks: List[str], tokenizer, model) -> List[float]:
+    def _predict_batch(self, chunks: List[str], tokenizer, model, positive_index: int) -> List[float]:
         """배치 예측"""
         try:
             # 토크나이징
@@ -204,32 +227,60 @@ class BERTAnalyzer:
             # 예측
             with torch.no_grad():
                 outputs = model(**inputs)
-                probabilities = torch.softmax(outputs.logits, dim=-1)
-                # 악성/취약점 클래스 확률 (클래스 1)
-                probs = probabilities[:, 1].cpu().numpy()
+                logits = outputs.logits
+                if logits.shape[-1] == 1:
+                    probs = torch.sigmoid(logits).squeeze(-1).cpu().numpy()
+                else:
+                    probabilities = torch.softmax(logits, dim=-1)
+                    probs = probabilities[:, positive_index].cpu().numpy()
             
             return probs.tolist()
             
         except Exception as e:
             print(f"❌ Error in batch prediction: {e}")
             return [0.0] * len(chunks)
+
+    def _resolve_positive_index(self, model, keywords: List[str]) -> int:
+        """모델 config에서 긍정 클래스 인덱스를 추론 (키워드 우선, 이진=1, 다중=마지막)."""
+        try:
+            config = getattr(model, "config", None)
+            id2label = getattr(config, "id2label", None)
+            if isinstance(id2label, dict) and len(id2label) > 0:
+                for key, name in id2label.items():
+                    try:
+                        idx = int(key)
+                    except Exception:
+                        continue
+                    if isinstance(name, str) and any(kw in name.lower() for kw in keywords):
+                        return idx
+            num_labels = getattr(config, "num_labels", None)
+            if num_labels == 1:
+                return 0
+            if num_labels == 2:
+                return 1
+            return int(num_labels - 1) if num_labels else 1
+        except Exception:
+            return 1
     
     def _aggregate_probabilities(self, probabilities: List[float]) -> float:
         """확률 집계 (중앙 가중치 + 최댓값)"""
         if not probabilities:
             return 0.0
         
-        # 중앙 가중치 계산
+        # 중앙 가중치 계산 (n=1 케이스 보호)
         n = len(probabilities)
-        weights = []
-        for i in range(n):
-            # 중앙에 가까울수록 높은 가중치
-            distance_from_center = abs(i - (n-1)/2)
-            weight = 1.0 - (distance_from_center / ((n-1)/2))
-            weights.append(max(0.1, weight))  # 최소 0.1
-        
-        # 가중 평균
-        weighted_avg = sum(p * w for p, w in zip(probabilities, weights)) / sum(weights)
+        if n == 1:
+            weighted_avg = probabilities[0]
+        else:
+            weights = []
+            for i in range(n):
+                # 중앙에 가까울수록 높은 가중치
+                distance_from_center = abs(i - (n-1)/2)
+                denom = ((n-1)/2) if (n-1) != 0 else 1.0
+                weight = 1.0 - (distance_from_center / denom)
+                weights.append(max(0.1, weight))  # 최소 0.1
+            # 가중 평균
+            weighted_avg = sum(p * w for p, w in zip(probabilities, weights)) / max(1e-8, sum(weights))
         
         # 최댓값
         max_prob = max(probabilities)
