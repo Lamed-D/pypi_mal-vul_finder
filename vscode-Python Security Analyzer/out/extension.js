@@ -56,6 +56,22 @@ function buildDashboardUrl(sessionId, isML = false) {
         ? `http://127.0.0.1:8000/session/${sessionId}/ML`
         : `http://127.0.0.1:8000/session/${sessionId}`;
 }
+async function safeOpenExternal(rawUrl) {
+    try {
+        const url = encodeURI(rawUrl);
+        const opened = await vscode.env.openExternal(vscode.Uri.parse(url));
+        if (!opened) {
+            throw new Error('Failed to open external URL');
+        }
+    }
+    catch (err) {
+        const selection = await vscode.window.showErrorMessage(`대시보드 URL 열기 실패: ${rawUrl}`, 'URL 복사');
+        if (selection === 'URL 복사') {
+            await vscode.env.clipboard.writeText(rawUrl);
+            vscode.window.showInformationMessage('대시보드 URL이 클립보드에 복사되었습니다. 브라우저에 붙여넣기 해주세요.');
+        }
+    }
+}
 async function createZipFromFolder(folderPath) {
     const tempZipPath = path.join(os.tmpdir(), `upload-${Date.now()}.zip`);
     await new Promise((resolve, reject) => {
