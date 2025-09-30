@@ -10,6 +10,34 @@ import FormData from 'form-data';
 
 const execAsync = promisify(exec);
 
+function buildDashboardUrl(sessionId: string, isML: boolean = false): string {
+  if (!sessionId) {
+    return 'http://127.0.0.1:8000/';
+  }
+  return isML
+    ? `http://127.0.0.1:8000/session/${sessionId}/ML`
+    : `http://127.0.0.1:8000/session/${sessionId}`;
+}
+
+async function safeOpenExternal(rawUrl: string) : Promise<void> {
+  try {
+    const url = encodeURI(rawUrl);
+    const opened = await vscode.env.openExternal(vscode.Uri.parse(url));
+    if (!opened) {
+      throw new Error('Failed to open external URL');
+    }
+  } catch (err) {
+    const selection = await vscode.window.showErrorMessage(
+      `대시보드 URL 열기 실패: ${rawUrl}`,
+      'URL 복사'
+    );
+    if (selection === 'URL 복사') {
+      await vscode.env.clipboard.writeText(rawUrl);
+      vscode.window.showInformationMessage('대시보드 URL이 클립보드에 복사되었습니다. 브라우저에 붙여넣기 해주세요.');
+    }
+  }
+}
+
 async function createZipFromFolder(folderPath: string): Promise<string> {
   const tempZipPath = path.join(os.tmpdir(), `upload-${Date.now()}.zip`);
   await new Promise<void>((resolve, reject) => {
@@ -275,12 +303,13 @@ export function activate(context: vscode.ExtensionContext) {
       const zipPath = await createPythonOnlyZipFromFolder(workspaceFolder);
       const result = await uploadZipToPythonServer(zipPath);
       
+      const dashUrl = result?.dashboard_url || buildDashboardUrl(result?.session_id);
       vscode.window.showInformationMessage(
         `업로드 완료! 세션 ID: ${result.session_id}`,
         '대시보드 열기'
       ).then(selection => {
         if (selection === '대시보드 열기') {
-          vscode.env.openExternal(vscode.Uri.parse(result.dashboard_url));
+          vscode.env.openExternal(vscode.Uri.parse(dashUrl));
         }
       });
       
@@ -299,12 +328,13 @@ export function activate(context: vscode.ExtensionContext) {
       const zipPath = await createPythonPackagesZip();
       const result = await uploadZipToEndpoint(zipPath, '/api/v1/upload/ML');
       
+      const dashUrl = result?.dashboard_url || buildDashboardUrl(result?.session_id, true);
       vscode.window.showInformationMessage(
         `Python 패키지 업로드 완료! 세션 ID: ${result.session_id}`,
         '대시보드 열기'
       ).then(selection => {
         if (selection === '대시보드 열기') {
-          vscode.env.openExternal(vscode.Uri.parse(result.dashboard_url));
+          vscode.env.openExternal(vscode.Uri.parse(dashUrl));
         }
       });
       
@@ -330,12 +360,13 @@ export function activate(context: vscode.ExtensionContext) {
       vscode.window.showInformationMessage('LSTM 통합 분석을 위한 ZIP 생성 중...');
       const zipPath = await createPythonOnlyZipFromFolder(workspaceFolder);
       const result = await uploadZipToEndpoint(zipPath, '/api/v1/upload/lstm');
+      const dashUrl = result?.dashboard_url || buildDashboardUrl(result?.session_id);
       vscode.window.showInformationMessage(
         `업로드 완료 (LSTM 통합)! 세션 ID: ${result.session_id}`,
         '대시보드 열기'
       ).then(selection => {
         if (selection === '대시보드 열기') {
-          vscode.env.openExternal(vscode.Uri.parse(result.dashboard_url));
+          vscode.env.openExternal(vscode.Uri.parse(dashUrl));
         }
       });
       fs.unlinkSync(zipPath);
@@ -355,12 +386,13 @@ export function activate(context: vscode.ExtensionContext) {
       vscode.window.showInformationMessage('LSTM 악성 전용 분석 ZIP 생성 중...');
       const zipPath = await createPythonOnlyZipFromFolder(workspaceFolder);
       const result = await uploadZipToEndpoint(zipPath, '/api/v1/upload/lstm/mal');
+      const dashUrl = result?.dashboard_url || buildDashboardUrl(result?.session_id);
       vscode.window.showInformationMessage(
         `업로드 완료 (LSTM 악성)! 세션 ID: ${result.session_id}`,
         '대시보드 열기'
       ).then(selection => {
         if (selection === '대시보드 열기') {
-          vscode.env.openExternal(vscode.Uri.parse(result.dashboard_url));
+          vscode.env.openExternal(vscode.Uri.parse(dashUrl));
         }
       });
       fs.unlinkSync(zipPath);
@@ -380,12 +412,13 @@ export function activate(context: vscode.ExtensionContext) {
       vscode.window.showInformationMessage('LSTM 취약점 전용 분석 ZIP 생성 중...');
       const zipPath = await createPythonOnlyZipFromFolder(workspaceFolder);
       const result = await uploadZipToEndpoint(zipPath, '/api/v1/upload/lstm/vul');
+      const dashUrl = result?.dashboard_url || buildDashboardUrl(result?.session_id);
       vscode.window.showInformationMessage(
         `업로드 완료 (LSTM 취약점)! 세션 ID: ${result.session_id}`,
         '대시보드 열기'
       ).then(selection => {
         if (selection === '대시보드 열기') {
-          vscode.env.openExternal(vscode.Uri.parse(result.dashboard_url));
+          vscode.env.openExternal(vscode.Uri.parse(dashUrl));
         }
       });
       fs.unlinkSync(zipPath);
@@ -405,12 +438,13 @@ export function activate(context: vscode.ExtensionContext) {
       vscode.window.showInformationMessage('BERT 통합 분석을 위한 ZIP 생성 중...');
       const zipPath = await createPythonOnlyZipFromFolder(workspaceFolder);
       const result = await uploadZipToEndpoint(zipPath, '/api/v1/upload/bert');
+      const dashUrl = result?.dashboard_url || buildDashboardUrl(result?.session_id);
       vscode.window.showInformationMessage(
         `업로드 완료 (BERT 통합)! 세션 ID: ${result.session_id}`,
         '대시보드 열기'
       ).then(selection => {
         if (selection === '대시보드 열기') {
-          vscode.env.openExternal(vscode.Uri.parse(result.dashboard_url));
+          vscode.env.openExternal(vscode.Uri.parse(dashUrl));
         }
       });
       fs.unlinkSync(zipPath);
@@ -430,12 +464,13 @@ export function activate(context: vscode.ExtensionContext) {
       vscode.window.showInformationMessage('BERT 악성 전용 분석 ZIP 생성 중...');
       const zipPath = await createPythonOnlyZipFromFolder(workspaceFolder);
       const result = await uploadZipToEndpoint(zipPath, '/api/v1/upload/bert/mal');
+      const dashUrl = result?.dashboard_url || buildDashboardUrl(result?.session_id);
       vscode.window.showInformationMessage(
         `업로드 완료 (BERT 악성)! 세션 ID: ${result.session_id}`,
         '대시보드 열기'
       ).then(selection => {
         if (selection === '대시보드 열기') {
-          vscode.env.openExternal(vscode.Uri.parse(result.dashboard_url));
+          vscode.env.openExternal(vscode.Uri.parse(dashUrl));
         }
       });
       fs.unlinkSync(zipPath);
@@ -455,12 +490,13 @@ export function activate(context: vscode.ExtensionContext) {
       vscode.window.showInformationMessage('BERT 취약점 전용 분석 ZIP 생성 중...');
       const zipPath = await createPythonOnlyZipFromFolder(workspaceFolder);
       const result = await uploadZipToEndpoint(zipPath, '/api/v1/upload/bert/vul');
+      const dashUrl = result?.dashboard_url || buildDashboardUrl(result?.session_id);
       vscode.window.showInformationMessage(
         `업로드 완료 (BERT 취약점)! 세션 ID: ${result.session_id}`,
         '대시보드 열기'
       ).then(selection => {
         if (selection === '대시보드 열기') {
-          vscode.env.openExternal(vscode.Uri.parse(result.dashboard_url));
+          vscode.env.openExternal(vscode.Uri.parse(dashUrl));
         }
       });
       fs.unlinkSync(zipPath);
@@ -475,12 +511,13 @@ export function activate(context: vscode.ExtensionContext) {
       vscode.window.showInformationMessage('ML 패키지 분석을 위한 패키지 ZIP 생성 중...');
       const zipPath = await createPythonPackagesZip();
       const result = await uploadZipToEndpoint(zipPath, '/api/v1/upload/ML');
+      const dashUrl = result?.dashboard_url || buildDashboardUrl(result?.session_id, true);
       vscode.window.showInformationMessage(
         `업로드 완료 (ML 패키지)! 세션 ID: ${result.session_id}`,
         '대시보드 열기'
       ).then(selection => {
         if (selection === '대시보드 열기') {
-          vscode.env.openExternal(vscode.Uri.parse(result.dashboard_url));
+          vscode.env.openExternal(vscode.Uri.parse(dashUrl));
         }
       });
       fs.unlinkSync(zipPath);

@@ -31,6 +31,8 @@
 
 ## 🚀 설치 및 실행 방법
 
+> 중요: VS Code 확장 개발/실행 시 워크스페이스로 반드시 `vscode-Python Security Analyzer` 폴더만 여세요. `vscode-extension`(Legacy) 폴더를 함께 열면 커맨드 충돌이 발생합니다.
+
 ### 1단계: 프로젝트 클론 및 이동
 ```powershell
 # 프로젝트 폴더로 이동
@@ -41,6 +43,9 @@ cd C:\Users\Lamed\Downloads\vscode-extension
 ```powershell
 # Node.js 의존성 설치
 npm install
+
+# TypeScript 컴파일 (필수)
+npm run compile
 ```
 
 ### 3단계: Python 서버 의존성 설치
@@ -97,7 +102,7 @@ INFO:     Application startup complete.
 ### 5단계: VS Code 확장 실행
 
 #### 5-1. 확장 개발 환경 실행
-1. VS Code에서 프로젝트 루트 폴더(`vscode-extension`)를 엽니다
+1. VS Code에서 프로젝트 루트 폴더(`vscode-Python Security Analyzer`)만 엽니다 (Legacy 폴더 동시 오픈 금지)
 2. `F5` 키로 Extension Development Host 실행 (또는 `Ctrl+Shift+P` → "Debug: Start Debugging")
 3. 새로운 "Extension Development Host" 창이 열립니다
 
