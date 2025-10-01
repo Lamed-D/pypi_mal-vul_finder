@@ -80,25 +80,25 @@
         <div class="row mb-4">
             <div class="col-md-3">
                 <div class="stat-card">
-                    <h3>{{ stats.total_sessions }}</h3>
+                    <h3 id="totalSessionsValue">{{ stats.total_sessions }}</h3>
                     <p><i class="fas fa-upload"></i> Total Sessions</p>
                 </div>
             </div>
             <div class="col-md-3">
                 <div class="stat-card success">
-                    <h3>{{ stats.total_files }}</h3>
+                    <h3 id="totalFilesValue">{{ stats.total_files }}</h3>
                     <p><i class="fas fa-file-code"></i> Total Files</p>
                 </div>
             </div>
             <div class="col-md-3">
                 <div class="stat-card danger">
-                    <h3>{{ stats.malicious_files }}</h3>
+                    <h3 id="maliciousFilesValue">{{ stats.malicious_files }}</h3>
                     <p><i class="fas fa-virus"></i> Malicious Files</p>
                 </div>
             </div>
             <div class="col-md-3">
                 <div class="stat-card warning">
-                    <h3>{{ stats.vulnerable_files }}</h3>
+                    <h3 id="vulnerableFilesValue">{{ stats.vulnerable_files }}</h3>
                     <p><i class="fas fa-exclamation-triangle"></i> Vulnerable Files</p>
                 </div>
             </div>
@@ -275,6 +275,29 @@
 
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
     <script>
+        function escapeHtml(value) {
+            if (value === null || value === undefined) {
+                return '';
+            }
+            return String(value)
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;')
+                .replace(/'/g, '&#39;');
+        }
+
+        const modelText = {
+            'lstm': 'LSTM',
+            'bert': 'BERT',
+            'ml': 'ML (LSTM + XGBoost)'
+        };
+        const modeText = {
+            'both': 'Vulnerability + Malicious analysis',
+            'mal': 'Malicious code analysis',
+            'vul': 'Vulnerability analysis'
+        };
+
         // Update current time
         function updateTime() {
             const now = new Date();
@@ -288,6 +311,9 @@
         const fileInput = document.getElementById('fileInput');
         const uploadProgress = document.getElementById('uploadProgress');
         const uploadStatus = document.getElementById('uploadStatus');
+        const sessionsList = document.getElementById('sessionsList');
+        let currentEventSource = null;
+        let analysisChart;
 
         uploadArea.addEventListener('click', () => fileInput.click());
         uploadArea.addEventListener('dragover', (e) => {
@@ -315,37 +341,29 @@
         // 모델 선택에 따른 Analysis Mode Section 표시/숨김
         const modelInputs = document.querySelectorAll('input[name="modelType"]');
         const analysisModeSection = document.getElementById('analysisModeSection');
-        
-        // 초기 로드 시 체크
+
         function updateAnalysisModeVisibility() {
             const selectedModel = document.querySelector('input[name="modelType"]:checked');
-            if (selectedModel && selectedModel.value === 'ml') {
-                analysisModeSection.style.display = 'none';
-            } else {
-                analysisModeSection.style.display = 'block';
-            }
+            analysisModeSection.style.display = (selectedModel && selectedModel.value === 'ml') ? 'none' : 'block';
         }
-        
-        // 초기 로드 시 실행
+
         updateAnalysisModeVisibility();
-        
         modelInputs.forEach(input => {
             input.addEventListener('change', updateAnalysisModeVisibility);
         });
 
-        // Progress bar 업데이트 함수
         function updateProgress(percentage, status) {
             const progressBar = document.getElementById('progressBar');
             const progressText = document.getElementById('progressText');
-            const uploadStatus = document.getElementById('uploadStatus');
-            
+
             if (progressBar && progressText) {
-                progressBar.style.width = percentage + '%';
-                progressBar.setAttribute('aria-valuenow', percentage);
-                progressText.textContent = percentage + '%';
-                
-                // 색상 변경 (50% 이상이면 초록색)
-                if (percentage >= 50) {
+                progressBar.style.width = `${percentage}%`;
+                progressBar.setAttribute('aria-valuenow', String(percentage));
+                progressText.textContent = `${percentage}%`;
+
+                if (percentage >= 75) {
+                    progressBar.style.backgroundColor = '#0f9d58';
+                } else if (percentage >= 50) {
                     progressBar.style.backgroundColor = '#28a745';
                 } else if (percentage >= 25) {
                     progressBar.style.backgroundColor = '#ffc107';
@@ -353,7 +371,7 @@
                     progressBar.style.backgroundColor = '#007bff';
                 }
             }
-            
+
             if (uploadStatus && status) {
                 uploadStatus.textContent = status;
             }
@@ -365,104 +383,306 @@
                 return;
             }
 
+            if (currentEventSource) {
+                currentEventSource.close();
+                currentEventSource = null;
+            }
+
             const formData = new FormData();
             formData.append('file', file);
 
             uploadProgress.style.display = 'block';
             uploadStatus.textContent = 'Uploading...';
-            
-            // Progress bar 초기화
-            updateProgress(0, 'Uploading...');
+            updateProgress(5, 'Preparing upload...');
 
             try {
-                // 선택된 모델과 분석 모드에 따라 API 엔드포인트 결정
                 const selectedModel = document.querySelector('input[name="modelType"]:checked').value;
-                const selectedMode = document.querySelector('input[name="analysisMode"]:checked').value;
-                let apiEndpoint = '/api/v1/upload'; // 기본값
-                
+                const selectedModeInput = document.querySelector('input[name="analysisMode"]:checked');
+                const selectedMode = selectedModeInput ? selectedModeInput.value : 'both';
+
+                let apiEndpoint = '/api/v1/upload';
                 if (selectedModel === 'lstm') {
-                    switch(selectedMode) {
-                        case 'both':
-                            apiEndpoint = '/api/v1/upload/lstm';
-                            break;
-                        case 'mal':
-                            apiEndpoint = '/api/v1/upload/lstm/mal';
-                            break;
-                        case 'vul':
-                            apiEndpoint = '/api/v1/upload/lstm/vul';
-                            break;
-                    }
+                    apiEndpoint = {
+                        'both': '/api/v1/upload/lstm',
+                        'mal': '/api/v1/upload/lstm/mal',
+                        'vul': '/api/v1/upload/lstm/vul'
+                    }[selectedMode];
                 } else if (selectedModel === 'bert') {
-                    switch(selectedMode) {
-                        case 'both':
-                            apiEndpoint = '/api/v1/upload/bert';
-                            break;
-                        case 'mal':
-                            apiEndpoint = '/api/v1/upload/bert/mal';
-                            break;
-                        case 'vul':
-                            apiEndpoint = '/api/v1/upload/bert/vul';
-                            break;
-                    }
+                    apiEndpoint = {
+                        'both': '/api/v1/upload/bert',
+                        'mal': '/api/v1/upload/bert/mal',
+                        'vul': '/api/v1/upload/bert/vul'
+                    }[selectedMode];
                 } else if (selectedModel === 'ml') {
-                    // ML 분석은 항상 통합 분석이므로 모드 무시
                     apiEndpoint = '/api/v1/upload/ML';
                 }
-                
-                // 업로드 시작
+
                 updateProgress(25, 'Uploading file...');
-                
                 const response = await fetch(apiEndpoint, {
                     method: 'POST',
                     body: formData
                 });
 
-                updateProgress(50, 'Processing file...');
                 const result = await response.json();
+                if (!response.ok) {
+                    updateProgress(0, `Upload failed: ${result.detail || 'Unknown error'}`);
+                    return;
+                }
 
-                if (response.ok) {
-                    const modelText = {
-                        'lstm': 'LSTM',
-                        'bert': 'BERT',
-                        'ml': 'ML (LSTM + XGBoost)'
-                    };
-                    const modeText = {
-                        'both': 'Vulnerability + Malicious analysis',
-                        'mal': 'Malicious code analysis',
-                        'vul': 'Vulnerability analysis'
-                    };
-                    
-                    if (selectedModel === 'ml') {
-                        uploadStatus.innerHTML = `
-                            <div class="alert alert-success">
-                                <h6><i class="fas fa-check-circle"></i> ML Analysis Started!</h6>
-                                <p><strong>Model:</strong> ${modelText[selectedModel]}</p>
-                                <p><strong>Session ID:</strong> ${result.session_id}</p>
-                                <p><strong>Status:</strong> ${result.message}</p>
-                                <div class="mt-2">
-                                    <button class="btn btn-sm btn-primary" onclick="window.open('/session/${result.session_id}/ML', '_blank')">
-                                        <i class="fas fa-external-link-alt"></i> View ML Analysis
-                                    </button>
-                                </div>
-                            </div>
-                        `;
-                    } else {
-                        uploadStatus.textContent = `Upload successful! ${modelText[selectedModel]} ${modeText[selectedMode]} started...`;
+                updateProgress(55, 'Upload completed. Starting analysis...');
+
+                uploadStatus.innerHTML = `
+                    <div class="alert alert-info mb-0">
+                        <h6 class="mb-1"><i class="fas fa-spinner fa-spin"></i> Analysis in progress...</h6>
+                        <p class="mb-0"><strong>Session ID:</strong> ${escapeHtml(result.session_id)}</p>
+                        <p class="mb-0"><strong>Model:</strong> ${modelText[selectedModel]}</p>
+                        ${selectedModel !== 'ml' ? `<p class="mb-0"><strong>Mode:</strong> ${modeText[selectedMode]}</p>` : ''}
+                    </div>
+                `;
+
+                listenForAnalysisEvents(result.session_id, selectedModel, selectedMode);
+            } catch (error) {
+                console.error('Upload error:', error);
+                updateProgress(0, `Upload error: ${error.message}`);
+            }
+        }
+
+        function listenForAnalysisEvents(sessionId, selectedModel, selectedMode) {
+            if (currentEventSource) {
+                currentEventSource.close();
+            }
+
+            currentEventSource = new EventSource(`/api/v1/events/${sessionId}`);
+
+            currentEventSource.addEventListener('analysis_started', (event) => {
+                try {
+                    const payload = JSON.parse(event.data || '{}');
+                    const modeLabel = payload.mode ? modeText[payload.mode] || payload.mode : modeText[selectedMode];
+                    uploadStatus.innerHTML = `
+                        <div class="alert alert-info mb-0">
+                            <h6 class="mb-1"><i class="fas fa-cog fa-spin"></i> Analysis started</h6>
+                            <p class="mb-0"><strong>Session ID:</strong> ${escapeHtml(payload.session_id)}</p>
+                            <p class="mb-0"><strong>Model:</strong> ${escapeHtml(modelText[payload.model] || payload.model)}</p>
+                            ${payload.model !== 'ml' ? `<p class="mb-0"><strong>Mode:</strong> ${escapeHtml(modeLabel)}</p>` : ''}
+                        </div>
+                    `;
+                    updateProgress(70, 'Analysis running...');
+                } catch (error) {
+                    console.warn('Failed to parse analysis_started payload', error);
+                }
+            });
+
+            currentEventSource.addEventListener('analysis_complete', (event) => {
+                try {
+                    const payload = JSON.parse(event.data || '{}');
+                    updateProgress(100, 'Analysis completed successfully');
+                    uploadStatus.innerHTML = formatAnalysisCompletionMessage(payload);
+                    refreshDashboardData();
+                } catch (error) {
+                    console.warn('Failed to parse analysis_complete payload', error);
+                    uploadStatus.textContent = 'Analysis completed, but the response could not be parsed.';
+                } finally {
+                    if (currentEventSource) {
+                        currentEventSource.close();
+                        currentEventSource = null;
                     }
-                    
-                    // 성공 시 100% 완료
-                    updateProgress(100, 'Upload completed successfully!');
-                    
-                    // Refresh the page after a short delay (ML 분석은 더 오래 걸리므로 5초)
-                    const refreshDelay = selectedModel === 'ml' ? 5000 : 2000;
-                    setTimeout(() => {
-                        location.reload();
-                    }, refreshDelay);
-                } else {
-                    updateProgress(0, 'Upload failed: ' + result.detail);
+                }
+            });
+
+            currentEventSource.addEventListener('analysis_failed', (event) => {
+                try {
+                    const payload = JSON.parse(event.data || '{}');
+                    updateProgress(100, 'Analysis failed');
+                    uploadStatus.innerHTML = formatAnalysisFailureMessage(payload);
+                    refreshDashboardData();
+                } catch (error) {
+                    console.warn('Failed to parse analysis_failed payload', error);
+                    uploadStatus.textContent = 'Analysis failed (unable to parse server response).';
+                } finally {
+                    if (currentEventSource) {
+                        currentEventSource.close();
+                        currentEventSource = null;
+                    }
+                }
+            });
+
+            currentEventSource.onerror = () => {
+                console.warn('Analysis event stream closed.');
+                if (currentEventSource) {
+                    currentEventSource.close();
+                    currentEventSource = null;
+                }
+            };
+        }
+
+        function formatAnalysisCompletionMessage(payload) {
+            const summary = payload.summary || {};
+            const redirectButton = payload.redirect_url ? `
+                <div class="mt-2">
+                    <button class="btn btn-sm btn-primary" onclick="window.open('${escapeHtml(payload.redirect_url)}', '_blank')">
+                        <i class="fas fa-external-link-alt"></i> View Results
+                    </button>
+                </div>
+            ` : '';
+
+            let summaryHtml = '';
+            if ('total_files' in summary) {
+                summaryHtml = `
+                    <p class="mb-0"><strong>Total files:</strong> ${summary.total_files}</p>
+                    <p class="mb-0"><strong>Safe:</strong> ${summary.safe_files}</p>
+                    <p class="mb-0"><strong>Vulnerable:</strong> ${summary.vulnerable_files}</p>
+                    <p class="mb-0"><strong>Malicious:</strong> ${summary.malicious_files}</p>
+                `;
+            } else if ('total_packages' in summary) {
+                summaryHtml = `
+                    <p class="mb-0"><strong>Total packages:</strong> ${summary.total_packages}</p>
+                    <p class="mb-0"><strong>Safe packages:</strong> ${summary.safe_packages}</p>
+                    <p class="mb-0"><strong>Vulnerable packages:</strong> ${summary.vulnerable_packages}</p>
+                    <p class="mb-0"><strong>Malicious packages:</strong> ${summary.malicious_packages}</p>
+                `;
+            }
+
+            const analysisTime = typeof summary.analysis_time === 'number'
+                ? `<p class="mb-0"><strong>Analysis time:</strong> ${summary.analysis_time.toFixed(2)}s</p>`
+                : '';
+
+            return `
+                <div class="alert alert-success mb-0">
+                    <h6 class="mb-1"><i class="fas fa-check-circle"></i> Analysis completed!</h6>
+                    <p class="mb-0"><strong>Session ID:</strong> ${escapeHtml(payload.session_id)}</p>
+                    <p class="mb-0"><strong>Model:</strong> ${escapeHtml(modelText[payload.model] || payload.model)}</p>
+                    ${payload.mode ? `<p class="mb-0"><strong>Mode:</strong> ${escapeHtml(modeText[payload.mode] || payload.mode)}</p>` : ''}
+                    ${summaryHtml}
+                    ${analysisTime}
+                    ${redirectButton}
+                </div>
+            `;
+        }
+
+        function formatAnalysisFailureMessage(payload) {
+            return `
+                <div class="alert alert-danger mb-0">
+                    <h6 class="mb-1"><i class="fas fa-exclamation-triangle"></i> Analysis failed</h6>
+                    <p class="mb-0"><strong>Session ID:</strong> ${escapeHtml(payload.session_id || 'N/A')}</p>
+                    <p class="mb-0"><strong>Model:</strong> ${escapeHtml(modelText[payload.model] || payload.model || 'Unknown')}</p>
+                    ${payload.mode ? `<p class="mb-0"><strong>Mode:</strong> ${escapeHtml(modeText[payload.mode] || payload.mode)}</p>` : ''}
+                    <p class="mb-0"><strong>Error:</strong> ${escapeHtml(payload.error || 'Unknown error')}</p>
+                </div>
+            `;
+        }
+
+        async function refreshDashboardData() {
+            try {
+                const [sessionsRes, statsRes] = await Promise.all([
+                    fetch('/api/v1/sessions?skip=0&limit=10'),
+                    fetch('/api/v1/stats')
+                ]);
+
+                if (sessionsRes.ok) {
+                    const sessions = await sessionsRes.json();
+                    renderSessions(Array.isArray(sessions) ? sessions : []);
+                }
+
+                if (statsRes.ok) {
+                    const stats = await statsRes.json();
+                    renderStats(stats);
                 }
             } catch (error) {
-                updateProgress(0, 'Upload error: ' + error.message);
+                console.error('Error refreshing dashboard data:', error);
+            }
+        }
+
+        function renderSessions(sessions) {
+            if (!sessionsList) {
+                return;
+            }
+
+            if (!Array.isArray(sessions) || sessions.length === 0) {
+                sessionsList.innerHTML = '<p class="text-muted mb-0">No analysis sessions yet.</p>';
+                return;
+            }
+
+            const sessionItems = sessions.map(session => {
+                const fileName = session.filename || 'Unknown file';
+                const uploadTime = session.upload_time ? new Date(session.upload_time).toLocaleString() : 'Unknown';
+                const safetyBadge = session.is_safe ? 'success' : 'danger';
+                const safetyLabel = session.is_safe ? 'Safe' : 'Unsafe';
+                const modelBadge = session.is_ml ? '<span class="badge bg-warning">ML</span>' : session.is_bert ? '<span class="badge bg-success">BERT</span>' : '<span class="badge bg-info">LSTM</span>';
+                const safeFileName = escapeHtml(fileName);
+                const safeUploadTime = escapeHtml(uploadTime);
+                const safeSessionId = escapeHtml(session.session_id);
+
+                let actionButtons = '';
+                if (session.is_ml) {
+                    actionButtons = `
+                        <a href="/session/${safeSessionId}/ML" class="btn btn-sm btn-outline-warning">
+                            <i class="fas fa-brain"></i> ML 분석 결과
+                        </a>
+                    `;
+                } else {
+                    const malButton = session.mal_flag ? `
+                        <a href="/session/${safeSessionId}/malicious" class="btn btn-sm btn-outline-danger">
+                            <i class="fas fa-skull-crossbones"></i> 악성
+                        </a>
+                    ` : '';
+                    const vulButton = session.vul_flag ? `
+                        <a href="/session/${safeSessionId}/vulnerable" class="btn btn-sm btn-outline-warning">
+                            <i class="fas fa-exclamation-triangle"></i> 취약
+                        </a>
+                    ` : '';
+                    actionButtons = `
+                        <button class="btn btn-sm btn-outline-primary" onclick="viewSession('${safeSessionId}')">
+                            <i class="fas fa-eye"></i> 전체
+                        </button>
+                        ${malButton}
+                        ${vulButton}
+                    `;
+                }
+
+                return `
+                    <div class="file-item">
+                        <div class="d-flex justify-content-between align-items-center">
+                            <div>
+                                <h6 class="mb-1">${safeFileName}</h6>
+                                <small class="text-muted">
+                                    <i class="fas fa-clock"></i> ${safeUploadTime}
+                                    <span class="badge bg-${safetyBadge}">${safetyLabel}</span>
+                                    ${modelBadge}
+                                </small>
+                            </div>
+                            <div class="btn-group" role="group">
+                                ${actionButtons}
+                            </div>
+                        </div>
+                    </div>
+                `;
+            }).join('');
+
+            sessionsList.innerHTML = sessionItems;
+        }
+
+        function renderStats(stats) {
+            if (!stats) {
+                return;
+            }
+
+            const totalSessionsEl = document.getElementById('totalSessionsValue');
+            const totalFilesEl = document.getElementById('totalFilesValue');
+            const maliciousFilesEl = document.getElementById('maliciousFilesValue');
+            const vulnerableFilesEl = document.getElementById('vulnerableFilesValue');
+
+            if (totalSessionsEl) totalSessionsEl.textContent = stats.total_sessions ?? 0;
+            if (totalFilesEl) totalFilesEl.textContent = stats.total_files ?? 0;
+            if (maliciousFilesEl) maliciousFilesEl.textContent = stats.malicious_files ?? 0;
+            if (vulnerableFilesEl) vulnerableFilesEl.textContent = stats.vulnerable_files ?? 0;
+
+            if (analysisChart) {
+                analysisChart.data.datasets[0].data = [
+                    stats.safe_files ?? 0,
+                    stats.malicious_files ?? 0,
+                    stats.vulnerable_files ?? 0
+                ];
+                analysisChart.update();
             }
         }
 
@@ -528,14 +748,14 @@
         }
 
         // Initialize chart
-        const ctx = document.getElementById('analysisChart').getContext('2d');
-        
-        // Chart data from server (using data attributes)
-        const safeFiles = parseInt(document.getElementById('analysisChart').getAttribute('data-safe-files') || '0');
-        const maliciousFiles = parseInt(document.getElementById('analysisChart').getAttribute('data-malicious-files') || '0');
-        const vulnerableFiles = parseInt(document.getElementById('analysisChart').getAttribute('data-vulnerable-files') || '0');
-        
-        const analysisChart = new Chart(ctx, {
+        const analysisChartCanvas = document.getElementById('analysisChart');
+        const ctx = analysisChartCanvas.getContext('2d');
+
+        const safeFiles = parseInt(analysisChartCanvas.getAttribute('data-safe-files') || '0', 10);
+        const maliciousFiles = parseInt(analysisChartCanvas.getAttribute('data-malicious-files') || '0', 10);
+        const vulnerableFiles = parseInt(analysisChartCanvas.getAttribute('data-vulnerable-files') || '0', 10);
+
+        analysisChart = new Chart(ctx, {
             type: 'doughnut',
             data: {
                 labels: ['Safe Files', 'Malicious Files', 'Vulnerable Files'],
@@ -553,6 +773,8 @@
                 maintainAspectRatio: false
             }
         });
+
+        refreshDashboardData();
     </script>
 
     <!-- Footer -->
