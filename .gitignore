@@ -91,9 +91,9 @@ server/logs/
 # **/*.safetensors
 # **/training_args.bin
 # 아래는 실제 대용량 파일 개별 제외 (이미 존재하므로 명시 유지)
-codebert_mal/model/codebert/model.safetensors
-codebert_test2/model/codebert/model.safetensors
-server/models/codebert/codebert/model.safetensors
+#codebert_mal/model/codebert/model.safetensors
+#codebert_test2/model/codebert/model.safetensors
+#server/models/codebert/codebert/model.safetensors
 
 # Extracted sources from ZIPs (do not commit extracted directories)
 codebert_test2/source/**
@@ -112,6 +112,6 @@ safepy_3_malicious_ML/extracted_files/**
 #safepy_3/result/
 #safepy_3_malicious/result/
 #codebert_mal/log/
-server/models/bert_mal/codebert/model.safetensors
-server/models/bert_vul/codebert/model.safetensors
+#server/models/bert_mal/codebert/model.safetensors
+#server/models/bert_vul/codebert/model.safetensors
 dataset/combined_2000_labeled_dataset_fixed.csv
