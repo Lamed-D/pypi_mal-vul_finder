@@ -28,12 +28,13 @@ sys.path.insert(0, str(server_dir))
 # FastAPI 및 웹 관련 라이브러리
 from fastapi import FastAPI, HTTPException, UploadFile, File, Request
 from fastapi.templating import Jinja2Templates
-from fastapi.responses import HTMLResponse, JSONResponse
+from fastapi.responses import HTMLResponse, JSONResponse, StreamingResponse
 
 # 유틸리티 라이브러리
 import uuid
 import asyncio
 from datetime import datetime
+from typing import Optional
 
 # 내부 모듈 import
 from database.database import (
@@ -45,6 +46,7 @@ from analysis.integrated_lstm_analyzer import IntegratedLSTMAnalyzer
 from analysis.bert_analyzer import BERTAnalyzer
 from analysis.ml_package_analyzer import MLPackageAnalyzer
 from app.services.file_service import FileService
+from app.services.event_service import EventManager
 from config import UPLOAD_DIR, MAX_FILE_SIZE, ALLOWED_EXTENSIONS
 
 # =============================================================================
@@ -87,6 +89,9 @@ bert_analyzer = BERTAnalyzer(models_dir)
 
 # ML 패키지 분석기 초기화 (LSTM + XGBoost)
 ml_package_analyzer = MLPackageAnalyzer()
+
+# SSE 이벤트 매니저 초기화
+event_manager = EventManager()
 
 @app.on_event("startup")
 async def startup_event():
@@ -191,7 +196,8 @@ async def upload_file_simple(
         
         # 백그라운드에서 통합 다중 프로세스 분석 시작
         asyncio.create_task(analyze_file_integrated_async(session_id, str(file_path), file.filename, len(file_content)))
-        
+        await _publish_started(session_id, file.filename, "lstm", "both")
+
         return {
             "message": "File uploaded successfully",
             "session_id": session_id,
@@ -236,7 +242,8 @@ async def upload_file(
         
         # Start integrated multiprocess analysis in background (both mode)
         asyncio.create_task(analyze_file_integrated_async(session_id, str(file_path), file.filename, len(file_content), "both"))
-        
+        await _publish_started(session_id, file.filename, "lstm", "both")
+
         return JSONResponse({
             "session_id": session_id,
             "filename": file.filename,
@@ -274,7 +281,8 @@ async def upload_file_lstm_both(
         
         # Start integrated multiprocess analysis in background (both mode)
         asyncio.create_task(analyze_file_integrated_async(session_id, str(file_path), file.filename, len(file_content), "both"))
-        
+        await _publish_started(session_id, file.filename, "lstm", "both")
+
         return JSONResponse({
             "session_id": session_id,
             "filename": file.filename,
@@ -313,7 +321,8 @@ async def upload_file_lstm_malicious(
         
         # Start integrated multiprocess analysis in background (malicious only)
         asyncio.create_task(analyze_file_integrated_async(session_id, str(file_path), file.filename, len(file_content), "mal"))
-        
+        await _publish_started(session_id, file.filename, "lstm", "mal")
+
         return JSONResponse({
             "session_id": session_id,
             "filename": file.filename,
@@ -352,7 +361,8 @@ async def upload_file_lstm_vulnerability(
         
         # Start integrated multiprocess analysis in background (vulnerability only)
         asyncio.create_task(analyze_file_integrated_async(session_id, str(file_path), file.filename, len(file_content), "vul"))
-        
+        await _publish_started(session_id, file.filename, "lstm", "vul")
+
         return JSONResponse({
             "session_id": session_id,
             "filename": file.filename,
@@ -391,7 +401,8 @@ async def upload_file_bert_both(
         
         # Start BERT analysis in background (both mode)
         asyncio.create_task(analyze_file_bert_async(session_id, str(file_path), file.filename, len(file_content), "both"))
-        
+        await _publish_started(session_id, file.filename, "bert", "both")
+
         return JSONResponse({
             "session_id": session_id,
             "filename": file.filename,
@@ -430,7 +441,8 @@ async def upload_file_bert_malicious(
         
         # Start BERT analysis in background (malicious only)
         asyncio.create_task(analyze_file_bert_async(session_id, str(file_path), file.filename, len(file_content), "mal"))
-        
+        await _publish_started(session_id, file.filename, "bert", "mal")
+
         return JSONResponse({
             "session_id": session_id,
             "filename": file.filename,
@@ -469,7 +481,8 @@ async def upload_file_bert_vulnerability(
         
         # Start BERT analysis in background (vulnerability only)
         asyncio.create_task(analyze_file_bert_async(session_id, str(file_path), file.filename, len(file_content), "vul"))
-        
+        await _publish_started(session_id, file.filename, "bert", "vul")
+
         return JSONResponse({
             "session_id": session_id,
             "filename": file.filename,
@@ -507,7 +520,26 @@ async def analyze_file_integrated_async(session_id: str, file_path: str, filenam
                 "filename": filename,
                 "file_size": file_size
             }
-            save_analysis_results(session_id, [], upload_info, mode, is_bert=False)
+            save_result = save_analysis_results(session_id, [], upload_info, mode, is_bert=False)
+            await event_manager.publish(
+                session_id,
+                "analysis_complete",
+                {
+                    "session_id": session_id,
+                    "model": "lstm",
+                    "mode": mode,
+                    "filename": filename,
+                    "status": "completed",
+                    "summary": {
+                        "total_files": save_result["total_files"],
+                        "safe_files": save_result["safe_files"],
+                        "vulnerable_files": save_result["vulnerability_results"],
+                        "malicious_files": save_result["malicious_results"],
+                        "analysis_time": save_result["total_analysis_time"]
+                    },
+                    "redirect_url": f"/session/{session_id}"
+                }
+            )
             return
         
         # 2. 통합 다중 프로세스 분석 실행 (3개 프로세스 제한)
@@ -535,15 +567,59 @@ async def analyze_file_integrated_async(session_id: str, file_path: str, filenam
             print(f"⏱️ Total analysis time: {save_result['total_analysis_time']:.2f} seconds")
             print(f"💾 Results saved to: LSTM_VUL, LSTM_MAL, main_log tables")
             print(f"🔄 Server continues running for next analysis...")
+
+            await event_manager.publish(
+                session_id,
+                "analysis_complete",
+                {
+                    "session_id": session_id,
+                    "model": "lstm",
+                    "mode": mode,
+                    "filename": filename,
+                    "status": "completed",
+                    "summary": {
+                        "total_files": save_result["total_files"],
+                        "safe_files": save_result["safe_files"],
+                        "vulnerable_files": save_result["vulnerability_results"],
+                        "malicious_files": save_result["malicious_results"],
+                        "analysis_time": save_result["total_analysis_time"]
+                    },
+                    "redirect_url": f"/session/{session_id}"
+                }
+            )
             
         else:
             print(f"❌ Integrated analysis failed for session {session_id}: {analysis_result.get('error', 'Unknown error')}")
-        
+            await event_manager.publish(
+                session_id,
+                "analysis_failed",
+                {
+                    "session_id": session_id,
+                    "model": "lstm",
+                    "mode": mode,
+                    "filename": filename,
+                    "status": "failed",
+                    "error": analysis_result.get("error", "Unknown error")
+                }
+            )
+
     except Exception as e:
         print(f"❌ Integrated analysis failed for session {session_id}: {e}")
         import traceback
         traceback.print_exc()
         print(f"🔄 Server continues running despite analysis error...")
+        await event_manager.publish(
+            session_id,
+            "analysis_failed",
+            {
+                "session_id": session_id,
+                "model": "lstm",
+                "mode": mode,
+                "filename": filename,
+                "status": "failed",
+                "error": str(e)
+            }
+        )
 
 async def analyze_file_bert_async(session_id: str, file_path: str, filename: str, file_size: int, mode: str = "both"):
     """BERT 백그라운드 분석 작업 - ZIP → .py 추출 → BERT 분석 → DB 저장
@@ -571,7 +647,26 @@ async def analyze_file_bert_async(session_id: str, file_path: str, filename: str
                 "filename": filename,
                 "file_size": file_size
             }
-            save_analysis_results(session_id, [], upload_info, mode, is_bert=True)
+            save_result = save_analysis_results(session_id, [], upload_info, mode, is_bert=True)
+            await event_manager.publish(
+                session_id,
+                "analysis_complete",
+                {
+                    "session_id": session_id,
+                    "model": "bert",
+                    "mode": mode,
+                    "filename": filename,
+                    "status": "completed",
+                    "summary": {
+                        "total_files": save_result["total_files"],
+                        "safe_files": save_result["safe_files"],
+                        "vulnerable_files": save_result["vulnerability_results"],
+                        "malicious_files": save_result["malicious_results"],
+                        "analysis_time": save_result["total_analysis_time"]
+                    },
+                    "redirect_url": f"/session/{session_id}"
+                }
+            )
             return
         
         # 2. BERT 분석 실행
@@ -599,15 +694,58 @@ async def analyze_file_bert_async(session_id: str, file_path: str, filename: str
             print(f"⏱️ Total analysis time: {save_result['total_analysis_time']:.2f} seconds")
             print(f"💾 Results saved to: BERT_VUL, BERT_MAL, main_log tables")
             print(f"🔄 Server continues running for next analysis...")
+            await event_manager.publish(
+                session_id,
+                "analysis_complete",
+                {
+                    "session_id": session_id,
+                    "model": "bert",
+                    "mode": mode,
+                    "filename": filename,
+                    "status": "completed",
+                    "summary": {
+                        "total_files": save_result["total_files"],
+                        "safe_files": save_result["safe_files"],
+                        "vulnerable_files": save_result["vulnerability_results"],
+                        "malicious_files": save_result["malicious_results"],
+                        "analysis_time": save_result["total_analysis_time"]
+                    },
+                    "redirect_url": f"/session/{session_id}"
+                }
+            )
             
         else:
             print(f"❌ BERT analysis failed for session {session_id}: {analysis_result.get('error', 'Unknown error')}")
-        
+            await event_manager.publish(
+                session_id,
+                "analysis_failed",
+                {
+                    "session_id": session_id,
+                    "model": "bert",
+                    "mode": mode,
+                    "filename": filename,
+                    "status": "failed",
+                    "error": analysis_result.get("error", "Unknown error")
+                }
+            )
+
     except Exception as e:
         print(f"❌ BERT analysis failed for session {session_id}: {e}")
         import traceback
         traceback.print_exc()
         print(f"🔄 Server continues running despite analysis error...")
+        await event_manager.publish(
+            session_id,
+            "analysis_failed",
+            {
+                "session_id": session_id,
+                "model": "bert",
+                "mode": mode,
+                "filename": filename,
+                "status": "failed",
+                "error": str(e)
+            }
+        )
 
 
 @app.get("/session/{session_id}")
@@ -677,6 +815,50 @@ async def get_vulnerable_files(session_id: str, request: Request):
     except Exception as e:
         print(f"❌ Error getting vulnerable files: {e}")
         raise HTTPException(status_code=500, detail=str(e))
+
+def _format_sse_message(payload: dict) -> str:
+    """Format SSE message with event name and JSON payload."""
+    event_name = payload.get("event", "message")
+    data = json.dumps(payload.get("data", {}))
+    return f"event: {event_name}\n" f"data: {data}\n\n"
+
+
+@app.get("/api/v1/events/{session_id}")
+async def stream_session_events(session_id: str, request: Request):
+    """SSE endpoint streaming analysis updates for a session."""
+    queue = await event_manager.subscribe(session_id)
+
+    async def event_generator():
+        try:
+            while True:
+                if await request.is_disconnected():
+                    break
+                try:
+                    event = await asyncio.wait_for(queue.get(), timeout=15.0)
+                except asyncio.TimeoutError:
+                    yield ": keep-alive\n\n"
+                    continue
+
+                yield _format_sse_message(event)
+
+        finally:
+            await event_manager.unsubscribe(session_id, queue)
+
+    return StreamingResponse(event_generator(), media_type="text/event-stream")
+
+
+async def _publish_started(session_id: str, filename: str, model: str, mode: Optional[str] = None) -> None:
+    """Notify subscribers that an analysis session has started."""
+    data = {
+        "session_id": session_id,
+        "filename": filename,
+        "status": "processing",
+        "model": model
+    }
+    if mode:
+        data["mode"] = mode
+    await event_manager.publish(session_id, "analysis_started", data)
+
 
 @app.get("/api/v1/sessions")
 async def get_sessions(skip: int = 0, limit: int = 100):
@@ -904,7 +1086,8 @@ async def upload_file_ml(file: UploadFile = File(...)):
         
         # Start ML analysis in background
         asyncio.create_task(analyze_file_ml_async(session_id, str(file_path), file.filename, len(file_content)))
-        
+        await _publish_started(session_id, file.filename, "ml")
+
         return JSONResponse({
             "session_id": session_id,
             "filename": file.filename,
@@ -932,16 +1115,38 @@ async def analyze_file_ml_async(session_id: str, file_path: str, filename: str, 
         
         if not extracted_files:
             print(f"❌ 파일 추출 실패: {session_id}")
+            await event_manager.publish(
+                session_id,
+                "analysis_failed",
+                {
+                    "session_id": session_id,
+                    "model": "ml",
+                    "filename": filename,
+                    "status": "failed",
+                    "error": "No Python files found in archive"
+                }
+            )
             return
-        
+
         # ML 패키지 분석 수행 (추출된 파일들을 직접 사용)
         extract_dir = UPLOAD_DIR / session_id / "extracted"
         analysis_result = ml_package_analyzer.analyze_extracted_files(str(extract_dir), extracted_files)
-        
+
         if "error" in analysis_result:
             print(f"❌ ML 분석 실패: {analysis_result['error']}")
+            await event_manager.publish(
+                session_id,
+                "analysis_failed",
+                {
+                    "session_id": session_id,
+                    "model": "ml",
+                    "filename": filename,
+                    "status": "failed",
+                    "error": analysis_result["error"]
+                }
+            )
             return
-        
+
         # 분석 결과를 DB에 저장
         if analysis_result.get("success") and analysis_result.get("results"):
             # 결과 데이터 준비
@@ -975,13 +1180,44 @@ async def analyze_file_ml_async(session_id: str, file_path: str, filename: str, 
                 "file_size": file_size
             }
             save_ml_analysis_log(session_id, upload_info, db_results, analysis_result.get("analysis_time", 0.0))
-        
+
         print(f"✅ ML 분석 완료: {filename} (Session: {session_id})")
-        
+        summary_data = analysis_result.get("summary") or {}
+        total_packages = analysis_result.get("total_packages", len(analysis_result.get("results", [])))
+        await event_manager.publish(
+            session_id,
+            "analysis_complete",
+            {
+                "session_id": session_id,
+                "model": "ml",
+                "filename": filename,
+                "status": "completed",
+                "summary": {
+                    "total_packages": total_packages,
+                    "malicious_packages": summary_data.get("malicious_packages", 0),
+                    "vulnerable_packages": summary_data.get("vulnerable_packages", 0),
+                    "safe_packages": summary_data.get("safe_packages", 0),
+                    "analysis_time": analysis_result.get("analysis_time", 0.0)
+                },
+                "redirect_url": f"/session/{session_id}/ML"
+            }
+        )
+
     except Exception as e:
         print(f"❌ ML 분석 중 오류: {e}")
         import traceback
         traceback.print_exc()
+        await event_manager.publish(
+            session_id,
+            "analysis_failed",
+            {
+                "session_id": session_id,
+                "model": "ml",
+                "filename": filename,
+                "status": "failed",
+                "error": str(e)
+            }
+        )
 
 @app.get("/api/v1/sessions/ML/{session_id}")
 async def get_ml_analysis_results(session_id: str):
