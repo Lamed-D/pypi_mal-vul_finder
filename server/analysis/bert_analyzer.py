@@ -7,11 +7,21 @@ import asyncio
 import os
 import sys
 import time
-import torch
+
+try:  # pragma: no cover - optional dependency guard
+    import torch  # type: ignore
+except ImportError:  # pragma: no cover
+    torch = None  # type: ignore
+
 import numpy as np
 from pathlib import Path
 from typing import Dict, List, Any, Optional
-from transformers import AutoTokenizer, AutoModelForSequenceClassification
+
+try:  # pragma: no cover - optional dependency guard
+    from transformers import AutoTokenizer, AutoModelForSequenceClassification
+except ImportError:  # pragma: no cover
+    AutoTokenizer = None  # type: ignore
+    AutoModelForSequenceClassification = None  # type: ignore
 
 # 서버 디렉토리를 Python 경로에 추가
 server_dir = Path(__file__).parents[1]
@@ -27,6 +37,11 @@ class BERTAnalyzer:
         Args:
             models_dir: 모델 디렉토리 경로
         """
+        if torch is None or AutoTokenizer is None or AutoModelForSequenceClassification is None:
+            raise RuntimeError(
+                "BERT analysis requires 'torch' and 'transformers' packages; install them to enable this feature."
+            )
+
         self.models_dir = Path(models_dir)
         self.device = "cuda" if torch.cuda.is_available() else "cpu"
         

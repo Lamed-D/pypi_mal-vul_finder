@@ -4,15 +4,40 @@ from __future__ import annotations
 
 import os
 from pathlib import Path
-from typing import Tuple
+from typing import Dict, Tuple
+
+
+def _load_env_files(base_dir: Path) -> None:
+    env_name = os.getenv("APP_ENV")
+    candidates = []
+    if env_name:
+        candidates.append(base_dir / f".env.{env_name}")
+    candidates.append(base_dir / ".env")
+
+    for env_path in candidates:
+        if not env_path.exists():
+            continue
+        for line in env_path.read_text(encoding="utf-8").splitlines():
+            line = line.strip()
+            if not line or line.startswith("#"):
+                continue
+            if "=" not in line:
+                continue
+            key, value = line.split("=", 1)
+            key = key.strip()
+            value = value.strip().strip('"').strip("'")
+            os.environ.setdefault(key, value)
 
 
 class Settings:
     """Lightweight settings loader using environment variables."""
 
-    def __init__(self) -> None:
-        base_dir = Path(__file__).resolve().parents[2]
-        self.base_dir = base_dir
+    def __init__(self, base_dir: Path | None = None, preload_env: bool = True) -> None:
+        base = base_dir or Path(__file__).resolve().parents[2]
+        self.base_dir = base
+
+        if preload_env:
+            _load_env_files(base)
 
         self.database_url = os.getenv("DATABASE_URL", "sqlite:///./main.db")
         self.host = os.getenv("HOST", "127.0.0.1")
@@ -41,18 +66,18 @@ class Settings:
         self.access_token_expire_minutes = int(os.getenv("ACCESS_TOKEN_EXPIRE_MINUTES", "30"))
 
         upload_dir_env = os.getenv("UPLOAD_DIR")
-        self.upload_dir = Path(upload_dir_env) if upload_dir_env else base_dir / "uploads"
+        self.upload_dir = Path(upload_dir_env) if upload_dir_env else base / "uploads"
         self.upload_dir.mkdir(parents=True, exist_ok=True)
 
         model_dir_env = os.getenv("MODEL_DIR")
-        self.model_dir = Path(model_dir_env) if model_dir_env else base_dir / "models"
+        self.model_dir = Path(model_dir_env) if model_dir_env else base / "models"
         self.model_dir.mkdir(parents=True, exist_ok=True)
 
         database_path_env = os.getenv("DATABASE_PATH")
-        self.database_path = Path(database_path_env) if database_path_env else base_dir / "main.db"
+        self.database_path = Path(database_path_env) if database_path_env else base / "main.db"
 
         ml_model_dir_env = os.getenv("ML_MODEL_DIR")
-        default_ml_dir = (base_dir / ".." / "safepy_3_malicious_ML").resolve()
+        default_ml_dir = (base / ".." / "safepy_3_malicious_ML").resolve()
         self.ml_model_dir = Path(ml_model_dir_env) if ml_model_dir_env else default_ml_dir
 
         self.lstm_model_path = self.model_dir / "lstm"

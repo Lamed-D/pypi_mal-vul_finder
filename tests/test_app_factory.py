@@ -1,11 +1,6 @@
 import sys
 from pathlib import Path
 
-import pytest
-
-pytest.importorskip("gensim", reason="gensim is required to initialise analyzers")
-
-
 def _ensure_server_on_path() -> None:
     server_dir = Path(__file__).resolve().parents[1] / "server"
     if str(server_dir) not in sys.path:

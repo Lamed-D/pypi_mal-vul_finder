@@ -31,7 +31,11 @@ from concurrent.futures import ProcessPoolExecutor, as_completed
 from typing import Dict, Any, List, Tuple
 from pathlib import Path
 import re
-from gensim.models import Word2Vec
+
+try:  # pragma: no cover - import guard for optional dependency
+    from gensim.models import Word2Vec  # type: ignore
+except ImportError:  # pragma: no cover
+    Word2Vec = None  # type: ignore
 
 # 프로세스 풀 크기 제한
 MAX_WORKERS = 3
@@ -46,6 +50,7 @@ class IntegratedLSTMAnalyzer:
         
         # 공통 모델들
         self.w2v_model = None
+        self._word2vec_available = Word2Vec is not None
         self.max_sequence_length = 100
         
         # 취약점 분석 모델들 (safepy_3)
@@ -70,7 +75,9 @@ class IntegratedLSTMAnalyzer:
         try:
             # Word2Vec 모델 로드 (공통)
             w2v_path = self.w2v_dir / "word2vec_withString10-6-100.model"
-            if w2v_path.exists():
+            if not self._word2vec_available:
+                print("⚠️ gensim not installed; Word2Vec-based features will be disabled")
+            elif w2v_path.exists():
                 self.w2v_model = Word2Vec.load(str(w2v_path))
                 print("✅ Word2Vec model loaded successfully")
             else:
@@ -127,7 +134,7 @@ class IntegratedLSTMAnalyzer:
     def embed_sequences(self, sequences: List[List[str]]) -> List[np.ndarray]:
         """시퀀스 임베딩 (공통 함수)"""
         if not self.w2v_model:
-            return []
+            raise RuntimeError("Word2Vec model is not available; ensure gensim is installed and model is present")
         
         embedded_sequences = []
         for sequence in sequences:
