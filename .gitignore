@@ -80,6 +80,7 @@ vscode-extension/*.vsix
 server/uploads/
 python-server/uploads/
 server/security_analysis.db
+server/main.db
 security_analysis.db
 vscode-extension/node_modules/
 # *.db  # (선택) 모든 DB 파일 제외 시 사용
