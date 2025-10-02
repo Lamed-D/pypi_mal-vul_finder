@@ -131,6 +131,43 @@ async function uploadZipToEndpoint(zipPath, endpoint) {
     });
     return response.data;
 }
+const POLL_INTERVAL_MS = 10000; // reduce server load: poll every 10s
+const POLL_TIMEOUT_MS = 10 * 60 * 1000; // 10 minutes
+function delay(ms) {
+    return new Promise(resolve => setTimeout(resolve, ms));
+}
+async function waitForSessionReady(sessionId, isML = false, onProgress, token) {
+    const baseUrl = 'http://127.0.0.1:8000';
+    const url = `${baseUrl}/api/v1/sessions/${sessionId}`;
+    const startedAt = Date.now();
+    let attempt = 0;
+    while (Date.now() - startedAt < POLL_TIMEOUT_MS) {
+        if (token?.isCancellationRequested) {
+            throw new Error('사용자가 분석 대기를 취소했습니다.');
+        }
+        attempt += 1;
+        try {
+            const res = await axios_1.default.get(url, { validateStatus: () => true });
+            if (res.status === 200 && res.data && res.data.session_id) {
+                return res.data;
+            }
+            if (res.status !== 404 && res.status >= 400) {
+                throw new Error(`서버 오류: ${res.status}`);
+            }
+            if (onProgress) {
+                onProgress(`분석 중... (시도 ${attempt})`);
+            }
+        }
+        catch (e) {
+            // 네트워크 오류는 재시도
+            if (onProgress) {
+                onProgress(`분석 결과 대기 중... (시도 ${attempt})`);
+            }
+        }
+        await delay(POLL_INTERVAL_MS);
+    }
+    throw new Error('분석이 제한 시간 내에 완료되지 않았습니다.');
+}
 async function getPythonSitePackagesPath() {
     try {
         const { stdout } = await execAsync('python -c "import site; print(site.getsitepackages()[0])"');
@@ -302,13 +339,21 @@ function activate(context) {
             vscode.window.showInformationMessage('Python 파일들을 압축하고 서버로 전송 중...');
             const zipPath = await createPythonOnlyZipFromFolder(workspaceFolder);
             const result = await uploadZipToPythonServer(zipPath);
+            fs.unlinkSync(zipPath);
             const dashUrl = result?.dashboard_url || buildDashboardUrl(result?.session_id);
-            vscode.window.showInformationMessage(`업로드 완료! 세션 ID: ${result.session_id}`, '대시보드 열기').then(selection => {
+            const summary = await vscode.window.withProgress({
+                location: vscode.ProgressLocation.Notification,
+                title: '서버가 코드를 분석 중입니다...',
+                cancellable: true
+            }, async (progress, token) => {
+                progress.report({ message: '분석 시작' });
+                return await waitForSessionReady(result.session_id, false, m => progress.report({ message: m }), token);
+            });
+            vscode.window.showInformationMessage(`분석 완료! 세션 ID: ${summary.session_id}`, '대시보드 열기').then(selection => {
                 if (selection === '대시보드 열기') {
                     vscode.env.openExternal(vscode.Uri.parse(dashUrl));
                 }
             });
-            fs.unlinkSync(zipPath);
         }
         catch (error) {
             const message = error?.message ?? String(error);
@@ -321,13 +366,21 @@ function activate(context) {
             vscode.window.showInformationMessage('Python 패키지 소스코드 추출을 시작합니다...');
             const zipPath = await createPythonPackagesZip();
             const result = await uploadZipToEndpoint(zipPath, '/api/v1/upload/ML');
+            fs.unlinkSync(zipPath);
             const dashUrl = result?.dashboard_url || buildDashboardUrl(result?.session_id, true);
-            vscode.window.showInformationMessage(`Python 패키지 업로드 완료! 세션 ID: ${result.session_id}`, '대시보드 열기').then(selection => {
+            const summary = await vscode.window.withProgress({
+                location: vscode.ProgressLocation.Notification,
+                title: 'ML 패키지 분석 진행 중...',
+                cancellable: true
+            }, async (progress, token) => {
+                progress.report({ message: '분석 시작' });
+                return await waitForSessionReady(result.session_id, true, m => progress.report({ message: m }), token);
+            });
+            vscode.window.showInformationMessage(`분석 완료 (ML 패키지)! 세션 ID: ${summary.session_id}`, '대시보드 열기').then(selection => {
                 if (selection === '대시보드 열기') {
                     vscode.env.openExternal(vscode.Uri.parse(dashUrl));
                 }
             });
-            fs.unlinkSync(zipPath);
         }
         catch (error) {
             const message = error?.message ?? String(error);
@@ -350,13 +403,18 @@ function activate(context) {
             vscode.window.showInformationMessage('LSTM 통합 분석을 위한 ZIP 생성 중...');
             const zipPath = await createPythonOnlyZipFromFolder(workspaceFolder);
             const result = await uploadZipToEndpoint(zipPath, '/api/v1/upload/lstm');
+            fs.unlinkSync(zipPath);
             const dashUrl = result?.dashboard_url || buildDashboardUrl(result?.session_id);
-            vscode.window.showInformationMessage(`업로드 완료 (LSTM 통합)! 세션 ID: ${result.session_id}`, '대시보드 열기').then(selection => {
+            const summary = await vscode.window.withProgress({
+                location: vscode.ProgressLocation.Notification,
+                title: 'LSTM 통합 분석 진행 중...',
+                cancellable: true
+            }, async (progress, token) => waitForSessionReady(result.session_id, false, m => progress.report({ message: m }), token));
+            vscode.window.showInformationMessage(`분석 완료 (LSTM 통합)! 세션 ID: ${summary.session_id}`, '대시보드 열기').then(selection => {
                 if (selection === '대시보드 열기') {
                     vscode.env.openExternal(vscode.Uri.parse(dashUrl));
                 }
             });
-            fs.unlinkSync(zipPath);
         }
         catch (error) {
             const message = error?.message ?? String(error);
@@ -373,13 +431,18 @@ function activate(context) {
             vscode.window.showInformationMessage('LSTM 악성 전용 분석 ZIP 생성 중...');
             const zipPath = await createPythonOnlyZipFromFolder(workspaceFolder);
             const result = await uploadZipToEndpoint(zipPath, '/api/v1/upload/lstm/mal');
+            fs.unlinkSync(zipPath);
             const dashUrl = result?.dashboard_url || buildDashboardUrl(result?.session_id);
-            vscode.window.showInformationMessage(`업로드 완료 (LSTM 악성)! 세션 ID: ${result.session_id}`, '대시보드 열기').then(selection => {
+            const summary = await vscode.window.withProgress({
+                location: vscode.ProgressLocation.Notification,
+                title: 'LSTM 악성 분석 진행 중...',
+                cancellable: true
+            }, async (progress, token) => waitForSessionReady(result.session_id, false, m => progress.report({ message: m }), token));
+            vscode.window.showInformationMessage(`분석 완료 (LSTM 악성)! 세션 ID: ${summary.session_id}`, '대시보드 열기').then(selection => {
                 if (selection === '대시보드 열기') {
                     vscode.env.openExternal(vscode.Uri.parse(dashUrl));
                 }
             });
-            fs.unlinkSync(zipPath);
         }
         catch (error) {
             const message = error?.message ?? String(error);
@@ -396,13 +459,18 @@ function activate(context) {
             vscode.window.showInformationMessage('LSTM 취약점 전용 분석 ZIP 생성 중...');
             const zipPath = await createPythonOnlyZipFromFolder(workspaceFolder);
             const result = await uploadZipToEndpoint(zipPath, '/api/v1/upload/lstm/vul');
+            fs.unlinkSync(zipPath);
             const dashUrl = result?.dashboard_url || buildDashboardUrl(result?.session_id);
-            vscode.window.showInformationMessage(`업로드 완료 (LSTM 취약점)! 세션 ID: ${result.session_id}`, '대시보드 열기').then(selection => {
+            const summary = await vscode.window.withProgress({
+                location: vscode.ProgressLocation.Notification,
+                title: 'LSTM 취약점 분석 진행 중...',
+                cancellable: true
+            }, async (progress, token) => waitForSessionReady(result.session_id, false, m => progress.report({ message: m }), token));
+            vscode.window.showInformationMessage(`분석 완료 (LSTM 취약점)! 세션 ID: ${summary.session_id}`, '대시보드 열기').then(selection => {
                 if (selection === '대시보드 열기') {
                     vscode.env.openExternal(vscode.Uri.parse(dashUrl));
                 }
             });
-            fs.unlinkSync(zipPath);
         }
         catch (error) {
             const message = error?.message ?? String(error);
@@ -419,13 +487,18 @@ function activate(context) {
             vscode.window.showInformationMessage('BERT 통합 분석을 위한 ZIP 생성 중...');
             const zipPath = await createPythonOnlyZipFromFolder(workspaceFolder);
             const result = await uploadZipToEndpoint(zipPath, '/api/v1/upload/bert');
+            fs.unlinkSync(zipPath);
             const dashUrl = result?.dashboard_url || buildDashboardUrl(result?.session_id);
-            vscode.window.showInformationMessage(`업로드 완료 (BERT 통합)! 세션 ID: ${result.session_id}`, '대시보드 열기').then(selection => {
+            const summary = await vscode.window.withProgress({
+                location: vscode.ProgressLocation.Notification,
+                title: 'BERT 통합 분석 진행 중...',
+                cancellable: true
+            }, async (progress, token) => waitForSessionReady(result.session_id, false, m => progress.report({ message: m }), token));
+            vscode.window.showInformationMessage(`분석 완료 (BERT 통합)! 세션 ID: ${summary.session_id}`, '대시보드 열기').then(selection => {
                 if (selection === '대시보드 열기') {
                     vscode.env.openExternal(vscode.Uri.parse(dashUrl));
                 }
             });
-            fs.unlinkSync(zipPath);
         }
         catch (error) {
             const message = error?.message ?? String(error);
@@ -442,13 +515,18 @@ function activate(context) {
             vscode.window.showInformationMessage('BERT 악성 전용 분석 ZIP 생성 중...');
             const zipPath = await createPythonOnlyZipFromFolder(workspaceFolder);
             const result = await uploadZipToEndpoint(zipPath, '/api/v1/upload/bert/mal');
+            fs.unlinkSync(zipPath);
             const dashUrl = result?.dashboard_url || buildDashboardUrl(result?.session_id);
-            vscode.window.showInformationMessage(`업로드 완료 (BERT 악성)! 세션 ID: ${result.session_id}`, '대시보드 열기').then(selection => {
+            const summary = await vscode.window.withProgress({
+                location: vscode.ProgressLocation.Notification,
+                title: 'BERT 악성 분석 진행 중...',
+                cancellable: true
+            }, async (progress, token) => waitForSessionReady(result.session_id, false, m => progress.report({ message: m }), token));
+            vscode.window.showInformationMessage(`분석 완료 (BERT 악성)! 세션 ID: ${summary.session_id}`, '대시보드 열기').then(selection => {
                 if (selection === '대시보드 열기') {
                     vscode.env.openExternal(vscode.Uri.parse(dashUrl));
                 }
             });
-            fs.unlinkSync(zipPath);
         }
         catch (error) {
             const message = error?.message ?? String(error);
@@ -465,13 +543,18 @@ function activate(context) {
             vscode.window.showInformationMessage('BERT 취약점 전용 분석 ZIP 생성 중...');
             const zipPath = await createPythonOnlyZipFromFolder(workspaceFolder);
             const result = await uploadZipToEndpoint(zipPath, '/api/v1/upload/bert/vul');
+            fs.unlinkSync(zipPath);
             const dashUrl = result?.dashboard_url || buildDashboardUrl(result?.session_id);
-            vscode.window.showInformationMessage(`업로드 완료 (BERT 취약점)! 세션 ID: ${result.session_id}`, '대시보드 열기').then(selection => {
+            const summary = await vscode.window.withProgress({
+                location: vscode.ProgressLocation.Notification,
+                title: 'BERT 취약점 분석 진행 중...',
+                cancellable: true
+            }, async (progress, token) => waitForSessionReady(result.session_id, false, m => progress.report({ message: m }), token));
+            vscode.window.showInformationMessage(`분석 완료 (BERT 취약점)! 세션 ID: ${summary.session_id}`, '대시보드 열기').then(selection => {
                 if (selection === '대시보드 열기') {
                     vscode.env.openExternal(vscode.Uri.parse(dashUrl));
                 }
             });
-            fs.unlinkSync(zipPath);
         }
         catch (error) {
             const message = error?.message ?? String(error);
