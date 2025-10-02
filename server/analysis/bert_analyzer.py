@@ -3,6 +3,7 @@ BERT 기반 통합 분석기
 CodeBERT 모델을 사용한 취약점 및 악성코드 분석
 """
 
+import asyncio
 import os
 import sys
 import time
@@ -11,8 +12,6 @@ import numpy as np
 from pathlib import Path
 from typing import Dict, List, Any, Optional
 from transformers import AutoTokenizer, AutoModelForSequenceClassification
-from concurrent.futures import ProcessPoolExecutor, as_completed
-import multiprocessing as mp
 
 # 서버 디렉토리를 Python 경로에 추가
 server_dir = Path(__file__).parents[1]
@@ -310,46 +309,49 @@ class BERTAnalyzer:
     
     async def analyze_files_multiprocess(self, session_id: str, files: List[Dict[str, Any]], mode: str = "both") -> Dict[str, Any]:
         """다중 프로세스로 파일들 분석"""
+        return await asyncio.to_thread(self._analyze_files_sync, session_id, files, mode)
+
+    def _analyze_files_sync(self, session_id: str, files: List[Dict[str, Any]], mode: str = "both") -> Dict[str, Any]:
         try:
             print(f"🔍 Starting BERT multiprocess analysis for {len(files)} files (mode: {mode})")
-            
+
             # 모델 로드
             if mode in ("both", "mal"):
                 self.load_malicious_model()
             if mode in ("both", "vul"):
                 self.load_vulnerability_model()
-            
-            results = []
+
+            results: List[Dict[str, Any]] = []
             total_files = len(files)
-            
+
             for i, file_info in enumerate(files):
                 try:
                     print(f"📄 Analyzing file {i+1}/{total_files}: {file_info['name']}")
-                    
+
                     if not file_info.get("content"):
                         print(f"⚠️ Empty content for file {file_info['path']}")
                         continue
-                    
+
                     result = self.analyze_single_file(file_info["content"], file_info["path"], mode=mode)
                     result["session_id"] = session_id
                     result["file_name"] = file_info["name"]
                     result["file_size"] = file_info["size"]
-                    
+
                     results.append(result)
-                    
+
                 except Exception as e:
                     print(f"❌ Error analyzing file {file_info.get('name', 'unknown')}: {e}")
                     continue
-            
+
             print(f"✅ BERT analysis completed: {len(results)} files processed")
-            
+
             return {
                 "status": "completed",
                 "results": results,
                 "total_files": len(results),
                 "analysis_type": "BERT"
             }
-            
+
         except Exception as e:
             print(f"❌ BERT multiprocess analysis failed: {e}")
             return {

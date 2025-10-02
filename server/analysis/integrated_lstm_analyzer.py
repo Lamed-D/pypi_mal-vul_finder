@@ -21,12 +21,12 @@
 - 메모리 효율적인 배치 처리
 - 모델 캐싱 및 재사용
 """
+import asyncio
 import pickle
 import os
 import numpy as np
 import pandas as pd
 import time
-import multiprocessing as mp
 from concurrent.futures import ProcessPoolExecutor, as_completed
 from typing import Dict, Any, List, Tuple
 from pathlib import Path
@@ -274,34 +274,32 @@ class IntegratedLSTMAnalyzer:
         }
     
     async def analyze_files_multiprocess(self, session_id: str, files: List[Dict[str, Any]], mode: str = "both") -> Dict[str, Any]:
-        """다중 프로세스로 파일들 분석 (3개 프로세스 제한)
+        """다중 프로세스로 파일들 분석 (3개 프로세스 제한)"""
+        return await asyncio.to_thread(self._analyze_files_multiprocess_sync, session_id, files, mode)
 
-        Args:
-            session_id: 세션 ID
-            files: {path, content, size} 리스트
-            mode: 'both' | 'mal' | 'vul'
-        """
+    def _analyze_files_multiprocess_sync(self, session_id: str, files: List[Dict[str, Any]], mode: str = "both") -> Dict[str, Any]:
+        """실제 다중 프로세스 분석을 동기적으로 수행한다."""
         try:
             # 프로세스 풀 초기화
             if self.executor is None:
                 self.executor = ProcessPoolExecutor(max_workers=MAX_WORKERS)
-            
+
             # 파일들을 청크로 나누어 병렬 처리
             chunk_size = max(1, len(files) // MAX_WORKERS)
             file_chunks = [files[i:i + chunk_size] for i in range(0, len(files), chunk_size)]
-            
+
             print(f"🚀 Starting multiprocess analysis for session {session_id}")
             print(f"📊 Processing {len(files)} files in {len(file_chunks)} chunks with {MAX_WORKERS} workers")
-            
+
             # 병렬 분석 실행
             futures = []
             for i, chunk in enumerate(file_chunks):
                 future = self.executor.submit(analyze_file_chunk_worker, chunk, session_id, i, str(self.models_dir), mode)
                 futures.append(future)
                 self.active_tasks[session_id] = self.active_tasks.get(session_id, []) + [future]
-            
+
             # 결과 수집
-            all_results = []
+            all_results: List[Dict[str, Any]] = []
             for future in as_completed(futures):
                 try:
                     chunk_results = future.result()
@@ -309,11 +307,11 @@ class IntegratedLSTMAnalyzer:
                 except Exception as e:
                     print(f"❌ Chunk analysis failed: {e}")
                     continue
-            
+
             # 활성 작업에서 제거
             if session_id in self.active_tasks:
                 del self.active_tasks[session_id]
-            
+
             print(f"✅ Analysis completed for session {session_id}: {len(all_results)} files processed")
             return {
                 "session_id": session_id,
@@ -322,7 +320,7 @@ class IntegratedLSTMAnalyzer:
                 "results": all_results,
                 "status": "completed"
             }
-            
+
         except Exception as e:
             print(f"❌ Multiprocess analysis failed for session {session_id}: {e}")
             return {

@@ -1130,7 +1130,11 @@ async def analyze_file_ml_async(session_id: str, file_path: str, filename: str, 
 
         # ML 패키지 분석 수행 (추출된 파일들을 직접 사용)
         extract_dir = UPLOAD_DIR / session_id / "extracted"
-        analysis_result = ml_package_analyzer.analyze_extracted_files(str(extract_dir), extracted_files)
+        analysis_result = await asyncio.to_thread(
+            ml_package_analyzer.analyze_extracted_files,
+            str(extract_dir),
+            extracted_files
+        )
 
         if "error" in analysis_result:
             print(f"❌ ML 분석 실패: {analysis_result['error']}")
