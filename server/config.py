@@ -1,119 +1,37 @@
-"""
-PySecure - Python Security Analysis System - 설정 파일
-=====================================================
+"""Backward-compatible configuration exports."""
 
-이 모듈은 PySecure 시스템의 모든 설정값을 중앙 집중식으로 관리합니다.
+from app.core.config import settings
 
-주요 설정 카테고리:
-- 데이터베이스 설정
-- 파일 업로드 설정
-- AI 분석 설정 (LSTM, BERT, ML)
-- API 서버 설정
-- 보안 설정
-- 로깅 설정
-"""
+BASE_DIR = settings.base_dir
+DATABASE_URL = settings.database_url
+DATABASE_PATH = settings.database_path
 
-import os
-from pathlib import Path
+UPLOAD_DIR = settings.upload_dir
+MAX_FILE_SIZE = settings.max_file_size
+ALLOWED_EXTENSIONS = settings.allowed_extension_set
 
-# =============================================================================
-# 기본 디렉토리 설정
-# =============================================================================
+ANALYSIS_TIMEOUT = settings.analysis_timeout
+BATCH_SIZE = settings.batch_size
+MAX_CODE_LENGTH = settings.max_code_length
+STRIDE = settings.stride
+THRESHOLD = settings.threshold
 
-# 서버 루트 디렉토리
-BASE_DIR = Path(__file__).parent
+MODEL_DIR = settings.model_dir
+LSTM_MODEL_PATH = settings.lstm_model_path
+W2V_MODEL_PATH = settings.w2v_model_path
 
-# =============================================================================
-# 데이터베이스 설정
-# =============================================================================
+ML_MODEL_DIR = settings.ml_model_dir
+XGBOOST_MODEL_PATH = settings.xgboost_model_path
+ML_LSTM_MODEL_PATH = settings.ml_lstm_model_path
+ML_LABEL_ENCODER_PATH = settings.ml_label_encoder_path
 
-# SQLite 데이터베이스 URL
-DATABASE_URL = "sqlite:///./main.db"
-# 데이터베이스 파일 경로
-DATABASE_PATH = BASE_DIR / "main.db"
-
-# =============================================================================
-# 파일 업로드 설정
-# =============================================================================
-
-# 업로드 디렉토리
-UPLOAD_DIR = BASE_DIR / "uploads"
-# 최대 파일 크기 (100MB)
-MAX_FILE_SIZE = 100 * 1024 * 1024
-# 허용된 파일 확장자 (ZIP 파일만)
-ALLOWED_EXTENSIONS = {".zip"}
-
-# =============================================================================
-# AI 분석 설정
-# =============================================================================
-
-# 분석 타임아웃 (5분)
-ANALYSIS_TIMEOUT = 300
-# 배치 크기 (한 번에 처리할 파일 수)
-BATCH_SIZE = 8
-# 최대 코드 길이 (토큰 수)
-MAX_CODE_LENGTH = 512
-# 스트라이드 (슬라이딩 윈도우 크기)
-STRIDE = 128
-# 임계값 (분류 기준)
-THRESHOLD = 0.5
-
-# =============================================================================
-# AI 모델 경로 설정
-# =============================================================================
-
-# 모델 디렉토리
-MODEL_DIR = BASE_DIR / "models"
-# LSTM 모델 디렉토리
-LSTM_MODEL_PATH = MODEL_DIR / "lstm"
-# Word2Vec 모델 파일 경로
-W2V_MODEL_PATH = MODEL_DIR / "w2v" / "word2vec_withString10-6-100.model"
-
-# ML 통합 분석 설정
-# safepy_3_malicious_ML 모델 경로 (상위 디렉토리)
-ML_MODEL_DIR = BASE_DIR.parent / "safepy_3_malicious_ML"
-# XGBoost 모델 파일 경로
-XGBOOST_MODEL_PATH = ML_MODEL_DIR / "xgboost_model.pkl"
-# ML LSTM 모델 경로
-ML_LSTM_MODEL_PATH = ML_MODEL_DIR / "model" / "model_mal.pkl"
-# ML 라벨 인코더 경로
-ML_LABEL_ENCODER_PATH = ML_MODEL_DIR / "model" / "label_encoder_mal.pkl"
-
-# =============================================================================
-# API 서버 설정
-# =============================================================================
-
-# API 버전 프리픽스
 API_V1_PREFIX = "/api/v1"
-# 서버 호스트
-HOST = "127.0.0.1"
-# 서버 포트
-PORT = 8000
-# 서비스 이름
-SERVICE_NAME = "PySecure"
-# 서비스 버전
-SERVICE_VERSION = "2.0.0"
+HOST = settings.host
+PORT = settings.port
+SERVICE_NAME = settings.service_name
+SERVICE_VERSION = settings.service_version
 
-# =============================================================================
-# 로깅 설정
-# =============================================================================
+LOG_LEVEL = settings.log_level
 
-# 로그 레벨
-LOG_LEVEL = "INFO"
-
-# =============================================================================
-# 보안 설정
-# =============================================================================
-
-# 시크릿 키 (환경변수에서 가져오거나 기본값 사용)
-SECRET_KEY = os.getenv("SECRET_KEY", "your-secret-key-here")
-# 액세스 토큰 만료 시간 (분)
-ACCESS_TOKEN_EXPIRE_MINUTES = 30
-
-# =============================================================================
-# 디렉토리 생성
-# =============================================================================
-
-# 필요한 디렉토리들을 자동으로 생성
-UPLOAD_DIR.mkdir(exist_ok=True)  # 업로드 디렉토리
-MODEL_DIR.mkdir(exist_ok=True)   # 모델 디렉토리
+SECRET_KEY = settings.secret_key
+ACCESS_TOKEN_EXPIRE_MINUTES = settings.access_token_expire_minutes

@@ -14,13 +14,14 @@ from app.services.file_service import FileService
 from app.services.event_service import EventManager
 from app.services.session_service import SessionService
 from app.services.analysis.orchestrator import AnalysisOrchestrator
+from app.services.analysis.engines import LazyAnalyzer
 
 
 @dataclass
 class AnalysisEngines:
-    lstm: IntegratedLSTMAnalyzer
-    bert: BERTAnalyzer
-    ml: MLPackageAnalyzer
+    lstm: LazyAnalyzer[IntegratedLSTMAnalyzer]
+    bert: LazyAnalyzer[BERTAnalyzer]
+    ml: LazyAnalyzer[MLPackageAnalyzer]
 
 
 class AppContainer:
@@ -37,9 +38,9 @@ class AppContainer:
 
         # 분석 엔진 초기화 (경로 지정 필요 시 주입 가능)
         self.engines = AnalysisEngines(
-            lstm=IntegratedLSTMAnalyzer(models_dir),
-            bert=BERTAnalyzer(models_dir),
-            ml=MLPackageAnalyzer(models_dir),
+            lstm=LazyAnalyzer(lambda: IntegratedLSTMAnalyzer(models_dir)),
+            bert=LazyAnalyzer(lambda: BERTAnalyzer(models_dir)),
+            ml=LazyAnalyzer(lambda: MLPackageAnalyzer(models_dir)),
         )
 
         # 분석 파이프라인 오케스트레이션

@@ -14,7 +14,6 @@ from database.database import (
     save_analysis_results,
     save_pkg_vul_analysis_results,
     save_ml_analysis_log,
-    get_session_summary,
 )
 from config import UPLOAD_DIR
 from app.services.event_service import EventManager
@@ -22,6 +21,7 @@ from app.services.file_service import FileService
 from analysis.integrated_lstm_analyzer import IntegratedLSTMAnalyzer
 from analysis.bert_analyzer import BERTAnalyzer
 from analysis.ml_package_analyzer import MLPackageAnalyzer
+from app.services.analysis.engines import LazyAnalyzer
 
 
 class AnalysisOrchestrator:
@@ -31,9 +31,9 @@ class AnalysisOrchestrator:
         self,
         file_service: FileService,
         event_manager: EventManager,
-        lstm_analyzer: IntegratedLSTMAnalyzer,
-        bert_analyzer: BERTAnalyzer,
-        ml_analyzer: MLPackageAnalyzer,
+        lstm_analyzer: LazyAnalyzer[IntegratedLSTMAnalyzer],
+        bert_analyzer: LazyAnalyzer[BERTAnalyzer],
+        ml_analyzer: LazyAnalyzer[MLPackageAnalyzer],
     ) -> None:
         self.file_service = file_service
         self.event_manager = event_manager
@@ -104,7 +104,8 @@ class AnalysisOrchestrator:
                 await self._publish_no_files(session_id, filename, "lstm", mode)
                 return
 
-            analysis_result = await self.lstm_analyzer.analyze_files_multiprocess(
+            lstm = self.lstm_analyzer.get()
+            analysis_result = await lstm.analyze_files_multiprocess(
                 session_id, extracted_files, mode
             )
 
@@ -153,7 +154,8 @@ class AnalysisOrchestrator:
                 await self._publish_no_files(session_id, filename, "bert", mode)
                 return
 
-            analysis_result = await self.bert_analyzer.analyze_files_multiprocess(
+            bert = self.bert_analyzer.get()
+            analysis_result = await bert.analyze_files_multiprocess(
                 session_id, extracted_files, mode
             )
 
@@ -208,8 +210,9 @@ class AnalysisOrchestrator:
                 return
 
             extract_dir = UPLOAD_DIR / session_id / "extracted"
+            ml = self.ml_analyzer.get()
             analysis_result = await asyncio.to_thread(
-                self.ml_analyzer.analyze_extracted_files,
+                ml.analyze_extracted_files,
                 str(extract_dir),
                 extracted_files,
             )

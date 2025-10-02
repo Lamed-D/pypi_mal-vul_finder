@@ -15,7 +15,8 @@ def create_app() -> FastAPI:
 
     @app.on_event("shutdown")
     async def shutdown_event() -> None:  # pragma: no cover
-        container.engines.lstm.shutdown_executor()
-        container.engines.bert.shutdown_executor()
+        container.engines.lstm.shutdown()
+        container.engines.bert.shutdown()
+        container.engines.ml.shutdown()
 
     return app

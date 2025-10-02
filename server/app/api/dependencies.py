@@ -25,15 +25,15 @@ def get_analysis_orchestrator(container: AppContainer = Depends(get_container)):
 
 
 def get_lstm_analyzer(container: AppContainer = Depends(get_container)):
-    return container.engines.lstm
+    return container.engines.lstm.get()
 
 
 def get_bert_analyzer(container: AppContainer = Depends(get_container)):
-    return container.engines.bert
+    return container.engines.bert.get()
 
 
 def get_ml_analyzer(container: AppContainer = Depends(get_container)):
-    return container.engines.ml
+    return container.engines.ml.get()
 
 
 def get_session_service(container: AppContainer = Depends(get_container)):
