@@ -5,7 +5,7 @@ from pathlib import Path
 from fastapi import APIRouter, HTTPException
 from fastapi.responses import PlainTextResponse
 
-from config import UPLOAD_DIR
+from app.core.config import settings
 
 
 router = APIRouter(prefix="/api/v1")
@@ -15,7 +15,7 @@ router = APIRouter(prefix="/api/v1")
 async def get_source_code(session_id: str, file_path: str):
     try:
         normalized_file_path = file_path.replace("\\", "/")
-        upload_dir = UPLOAD_DIR / session_id
+        upload_dir = settings.upload_dir / session_id
 
         if not upload_dir.exists():
             raise HTTPException(status_code=404, detail="Session not found")

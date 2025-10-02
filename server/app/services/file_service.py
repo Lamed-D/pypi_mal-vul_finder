@@ -22,7 +22,7 @@ import zipfile
 from pathlib import Path
 from typing import List, Dict, Any
 
-from config import UPLOAD_DIR
+from app.core.config import settings
 
 class FileService:
     """
@@ -35,7 +35,7 @@ class FileService:
     def __init__(self):
         """파일 서비스 초기화"""
         # 업로드 디렉토리 설정 및 생성
-        self.upload_dir = UPLOAD_DIR
+        self.upload_dir = settings.upload_dir
         self.upload_dir.mkdir(exist_ok=True)
     
     def save_uploaded_file(self, file_content: bytes, session_id: str, filename: str) -> str:

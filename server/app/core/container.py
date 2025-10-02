@@ -5,7 +5,7 @@ from typing import Optional
 from fastapi.templating import Jinja2Templates
 import json
 
-from config import SERVICE_NAME, SERVICE_VERSION
+from app.core.config import settings
 from database.database import init_database
 from analysis.integrated_lstm_analyzer import IntegratedLSTMAnalyzer
 from analysis.bert_analyzer import BERTAnalyzer
@@ -61,10 +61,10 @@ class AppContainer:
     def metadata(self) -> dict:
         """FastAPI 메타데이터 생성을 위해 서비스 정보 반환."""
         return {
-            "title": f"{SERVICE_NAME} - Python Security Analysis",
+            "title": f"{settings.service_name} - Python Security Analysis",
             "description": (
                 "AI-powered Python code security analysis with vulnerability and "
                 "malware detection using LSTM, BERT, and ML models"
             ),
-            "version": SERVICE_VERSION,
+            "version": settings.service_version,
         }

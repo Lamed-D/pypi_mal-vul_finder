@@ -9,7 +9,7 @@ from pathlib import Path
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
 from fastapi.responses import JSONResponse
 
-from config import HOST, PORT, MAX_FILE_SIZE, ALLOWED_EXTENSIONS
+from app.core.config import settings
 from app.api.dependencies import (
     get_analysis_orchestrator,
     get_file_service,
@@ -33,11 +33,11 @@ async def _process_upload(
         raise HTTPException(status_code=400, detail="No filename provided")
 
     suffix = Path(upload.filename).suffix.lower()
-    if suffix not in ALLOWED_EXTENSIONS:
+    if suffix not in settings.allowed_extension_set:
         raise HTTPException(status_code=400, detail="Only ZIP files are allowed")
 
     content = await upload.read()
-    if len(content) > MAX_FILE_SIZE:
+    if len(content) > settings.max_file_size:
         raise HTTPException(status_code=400, detail="File too large")
 
     session_id = str(uuid.uuid4())
@@ -71,7 +71,7 @@ async def upload_file_simple(
 ):
     """VS Code 확장에서 사용하는 간단 업로드 엔드포인트."""
     result = await _process_upload(file, orchestrator, file_service, model="lstm", mode="both")
-    dashboard_url = f"http://{HOST}:{PORT}/session/{result['session_id']}"
+    dashboard_url = f"http://{settings.host}:{settings.port}/session/{result['session_id']}"
     return {
         "message": "File uploaded successfully",
         "session_id": result["session_id"],

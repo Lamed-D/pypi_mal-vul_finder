@@ -15,7 +15,7 @@ from database.database import (
     save_pkg_vul_analysis_results,
     save_ml_analysis_log,
 )
-from config import UPLOAD_DIR
+from app.core.config import settings
 from app.services.event_service import EventManager
 from app.services.file_service import FileService
 from analysis.integrated_lstm_analyzer import IntegratedLSTMAnalyzer
@@ -209,7 +209,7 @@ class AnalysisOrchestrator:
                 )
                 return
 
-            extract_dir = UPLOAD_DIR / session_id / "extracted"
+            extract_dir = settings.upload_dir / session_id / "extracted"
             ml = self.ml_analyzer.get()
             analysis_result = await asyncio.to_thread(
                 ml.analyze_extracted_files,
