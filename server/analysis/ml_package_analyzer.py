@@ -24,14 +24,28 @@ import csv
 import re
 import zipfile
 import pickle
-import numpy as np
-import pandas as pd
+try:  # pragma: no cover - optional dependency guard
+    import numpy as np
+except ImportError:  # pragma: no cover
+    np = None  # type: ignore
+
+try:  # pragma: no cover
+    import pandas as pd
+except ImportError:  # pragma: no cover
+    pd = None  # type: ignore
 import time
 import math
-import requests
+try:  # pragma: no cover
+    import requests
+except ImportError:  # pragma: no cover
+    requests = None  # type: ignore
 from typing import Optional, Dict, List, Tuple, Any
 from collections import Counter
-from sklearn.preprocessing import StandardScaler, MinMaxScaler
+try:  # pragma: no cover
+    from sklearn.preprocessing import StandardScaler, MinMaxScaler
+except ImportError:  # pragma: no cover
+    StandardScaler = None  # type: ignore
+    MinMaxScaler = None  # type: ignore
 from pathlib import Path
 import shutil
 
@@ -48,7 +62,10 @@ try:
 except ImportError:
     HAS_CHARDET = False
 
-from tensorflow.keras import backend as K
+try:  # pragma: no cover
+    from tensorflow.keras import backend as K
+except ImportError:  # pragma: no cover
+    K = None  # type: ignore
 
 # preprocess import 시 출력 메시지 임시 숨기기
 import sys
@@ -61,6 +78,10 @@ try:
     # safepy_3_malicious_ML의 preprocess 모듈 import
     sys.path.append(str(Path(__file__).parents[2] / "safepy_3_malicious_ML"))
     from preprocess import tokenize_python, embed_sequences, w2v_model
+except ImportError:  # pragma: no cover
+    tokenize_python = None  # type: ignore
+    embed_sequences = None  # type: ignore
+    w2v_model = None  # type: ignore
 finally:
     sys.stdout = old_stdout
 
@@ -76,6 +97,27 @@ class MLPackageAnalyzer:
     
     def __init__(self, models_dir: str = None):
         """ML 패키지 분석기 초기화"""
+        missing_dependencies = []
+        if np is None:
+            missing_dependencies.append("numpy")
+        if pd is None:
+            missing_dependencies.append("pandas")
+        if StandardScaler is None or MinMaxScaler is None:
+            missing_dependencies.append("scikit-learn")
+        if K is None:
+            missing_dependencies.append("tensorflow")
+        if requests is None:
+            missing_dependencies.append("requests")
+        if tokenize_python is None or embed_sequences is None or w2v_model is None:
+            missing_dependencies.append("safepy_3_malicious_ML preprocess")
+
+        if missing_dependencies:
+            raise RuntimeError(
+                "MLPackageAnalyzer requires additional dependencies: "
+                + ", ".join(missing_dependencies)
+                + ". Install optional ML components to enable this feature."
+            )
+
         # 모델 디렉토리 설정
         if models_dir:
             self.models_dir = Path(models_dir)
@@ -753,10 +795,11 @@ class MLPackageAnalyzer:
             return {"error": f"분석 중 오류 발생: {str(e)}"}
         finally:
             # 메모리 정리
-            try:
-                K.clear_session()
-            except:
-                pass
+            if K is not None:
+                try:
+                    K.clear_session()
+                except Exception:
+                    pass
     
     def analyze_extracted_files(self, extract_dir: str, extracted_files: List[Dict[str, Any]]) -> Dict[str, Any]:
         """추출된 파일들을 통한 패키지 분석 (서버 통합용)"""
@@ -874,7 +917,8 @@ class MLPackageAnalyzer:
             return {"error": f"분석 중 오류 발생: {str(e)}"}
         finally:
             # 메모리 정리
-            try:
-                K.clear_session()
-            except:
-                pass
+            if K is not None:
+                try:
+                    K.clear_session()
+                except Exception:
+                    pass
