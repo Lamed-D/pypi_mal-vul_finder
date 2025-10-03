@@ -48,18 +48,6 @@
             font-weight: bold;
         }
         
-        .confidence-bar {
-            height: 20px;
-            border-radius: 10px;
-            background: linear-gradient(90deg, #28a745 0%, #ffc107 50%, #dc3545 100%);
-        }
-        
-        .confidence-fill {
-            height: 100%;
-            border-radius: 10px;
-            background-color: rgba(255, 255, 255, 0.8);
-            transition: width 0.3s ease;
-        }
         
         .package-header {
             background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
@@ -219,7 +207,6 @@
                                 <span class="badge {% if result.lstm_vulnerability_status == 'Vulnerable' %}bg-warning{% else %}bg-success{% endif %}">
                                     {{ result.lstm_vulnerability_status }}
                                 </span>
-                                <small class="text-muted">{{ "%.1f"|format(result.lstm_confidence * 100) }}%</small>
                             </div>
                             {% if result.lstm_cwe_label and result.lstm_cwe_label != 'Benign' %}
                             <small class="text-muted">CWE: {{ result.lstm_cwe_label }}</small>
@@ -233,7 +220,6 @@
                                 <span class="badge {% if result.xgboost_prediction == 1 %}bg-danger{% else %}bg-success{% endif %}">
                                     {% if result.xgboost_prediction == 1 %}악성{% else %}정상{% endif %}
                                 </span>
-                                <small class="text-muted">{{ "%.1f"|format(result.xgboost_confidence * 100) }}%</small>
                             </div>
                         </div>
 
@@ -251,21 +237,6 @@
                             </span>
                         </div>
 
-                        <!-- Confidence Visualization -->
-                        <div class="mb-2">
-                            <small class="text-muted">신뢰도:</small>
-                            <div class="progress" style="height: 20px;">
-                                <div class="progress-bar progress-bar-striped progress-bar-animated" 
-                                     role="progressbar"
-                                     id="ml-confidence-{{ loop.index }}"
-                                     style="width: 0%; background-color: {% if result.lstm_confidence > 0.7 %}#dc3545{% elif result.lstm_confidence > 0.4 %}#ffc107{% else %}#28a745{% endif %};"
-                                     data-progress="{{ (result.lstm_confidence * 100)|round(1) }}"
-                                     aria-valuenow="{{ (result.lstm_confidence * 100)|round(1) }}"
-                                     aria-valuemin="0" aria-valuemax="100">
-                                    <span style="color: {% if result.lstm_confidence > 0.7 %}white{% else %}#212529{% endif %}; font-weight: bold; font-size: 0.8em;">{{ "%.1f"|format(result.lstm_confidence * 100) }}%</span>
-                                </div>
-                            </div>
-                        </div>
                     </div>
                 </div>
             </div>
@@ -335,16 +306,6 @@
                 });
             });
 
-            // Add loading animation for confidence bars
-            setTimeout(() => {
-                const progressBars = document.querySelectorAll('[id^="ml-confidence-"]');
-                progressBars.forEach((bar, index) => {
-                    const targetWidth = bar.getAttribute('data-progress');
-                    setTimeout(() => {
-                        bar.style.width = targetWidth + '%';
-                    }, index * 100); // 각 바를 100ms씩 지연시켜 순차적으로 애니메이션
-                });
-            }, 500);
         });
     </script>
 </body>

@@ -105,8 +105,8 @@ async def get_ml_results(
         {
             "request": request,
             "session": session,
-            "analysis_results": ml_results,
-            "analysis_summary": ml_summary,
+            "results": ml_results,
+            "summary": ml_summary,
         },
     )
 

@@ -264,7 +264,7 @@ class AnalysisOrchestrator:
                 save_ml_analysis_log(
                     session_id,
                     upload_info,
-                    analysis_result.get("summary", {}),
+                    analysis_result.get("results", []),
                     analysis_result.get("analysis_time", 0.0),
                 )
 

@@ -495,6 +495,14 @@ def get_session_summary(session_id: str) -> Optional[Dict[str, Any]]:
         is_bert_analysis = bool(log_record.is_bert) if log_record.is_bert is not None else False
         is_ml_analysis = bool(log_record.is_ml) if log_record.is_ml is not None else False
         
+        # 변수 초기화
+        vul_records = []
+        vul_safe_records = []
+        mal_records = []
+        mal_safe_records = []
+        ml_records = []
+        unique_safe_files = 0
+        
         if is_ml_analysis:
             # ML 분석 결과 조회
             ml_records = db.query(PKG_VUL_ANALYSIS).filter(PKG_VUL_ANALYSIS.session_id == session_id).all()
@@ -808,7 +816,7 @@ def get_pkg_vul_analysis_summary(session_id: str) -> Dict[str, Any]:
         total_packages = len(results)
         malicious_packages = sum(1 for r in results if r.final_malicious_status)
         vulnerable_packages = sum(1 for r in results if r.lstm_vulnerability_status == "Vulnerable")
-        safe_packages = total_packages - malicious_packages
+        safe_packages = sum(1 for r in results if not r.final_malicious_status and r.lstm_vulnerability_status != "Vulnerable")
         
         return {
             "session_id": session_id,
