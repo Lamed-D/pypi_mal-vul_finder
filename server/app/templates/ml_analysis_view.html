@@ -88,9 +88,6 @@
                 <a class="nav-link" href="/">
                     <i class="fas fa-home"></i> 대시보드
                 </a>
-                <a class="nav-link" href="/upload">
-                    <i class="fas fa-upload"></i> 파일 업로드
-                </a>
             </div>
         </div>
     </nav>
@@ -107,8 +104,8 @@
                 </div>
                 <div class="col-md-4 text-end">
                     <div class="stats-card">
-                        <h5 class="mb-1">세션 ID</h5>
-                        <code>{{ session_id }}</code>
+                        <h5 class="mb-1 text-dark">세션 ID</h5>
+                        <code class="bg-white text-dark px-2 py-1">{{ session.session_id }}</code>
                     </div>
                 </div>
             </div>
