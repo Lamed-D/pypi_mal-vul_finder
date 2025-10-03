@@ -47,6 +47,9 @@ npm install
 # TypeScript 컴파일 (필수)
 npm run compile
 ```
+# 컴파일용
+npm install -g @vscode/vsce
+vsce package
 
 ### 3단계: Python 서버 의존성 설치
 
