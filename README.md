@@ -7,14 +7,13 @@ PySecure는 Python 코드의 악성 여부 및 취약점을 다중 엔진(LSTM, 
 ```bash
 # 서버 실행 (필요 시 가상환경에서)
 cd server
-cp .env.example .env  # 환경설정 템플릿 복사 후 값 수정
 python run.py
 ```
 
 기본 서비스 주소는 `http://127.0.0.1:8000` 입니다.
 
 ### 필수 의존성
-- Python 3.9+
+- Python 3.11
 - FastAPI, SQLAlchemy, Uvicorn 등 `server/requirements.txt`에 정의된 패키지
 
 ### 선택적 분석 엔진 의존성
@@ -41,14 +40,6 @@ python run.py
 - FastAPI 앱 구조는 `app/__init__.py`의 `create_app()`을 통해 초기화됩니다.
 - 라우터는 `app/api/routers/`에, 서비스 로직은 `app/services/`에 위치합니다.
 - 분석 파이프라인은 `app/services/analysis/orchestrator.py`에서 관리되며, 개별 엔진은 지연 로딩됩니다.
-
-## 테스트
-
-```bash
-pytest -q
-```
-
-필요한 ML/BERT 패키지가 설치되지 않은 경우 관련 기능은 자동으로 건너뛰거나 명확한 오류를 제공합니다.
 
 ## 참고 자료
 - 사용 동영상 가이드: https://youtu.be/-y6QJE9Cj4s
