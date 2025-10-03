@@ -3,11 +3,12 @@
 from fastapi import FastAPI
 
 from app.core.container import AppContainer
+from app.core.config import settings
 from app.api.routers import register_routers
 
 
 def create_app() -> FastAPI:
-    container = AppContainer()
+    container = AppContainer(models_dir=str(settings.model_dir))
     app = FastAPI(**container.metadata)
     app.state.container = container
 

@@ -816,7 +816,7 @@ def get_pkg_vul_analysis_summary(session_id: str) -> Dict[str, Any]:
         total_packages = len(results)
         malicious_packages = sum(1 for r in results if r.final_malicious_status)
         vulnerable_packages = sum(1 for r in results if r.lstm_vulnerability_status == "Vulnerable")
-        safe_packages = sum(1 for r in results if not r.final_malicious_status and r.lstm_vulnerability_status != "Vulnerable")
+        safe_packages = total_packages - malicious_packages
         
         return {
             "session_id": session_id,

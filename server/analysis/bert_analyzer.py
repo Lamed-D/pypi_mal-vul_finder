@@ -27,6 +27,24 @@ except ImportError:  # pragma: no cover
 server_dir = Path(__file__).parents[1]
 sys.path.insert(0, str(server_dir))
 
+def load_labels(path: str) -> Optional[List[str]]:
+    """텍스트 파일에서 라벨명을 줄 단위로 로드. 파일이 없으면 None.
+
+    Args:
+        path: 라벨 파일 경로
+
+    Returns:
+        라벨명 리스트 또는 None
+    """
+    if not os.path.exists(path):
+        return None
+    try:
+        with open(path, "r", encoding="utf-8") as f:
+            labels = [line.strip() for line in f if line.strip()]
+        return labels or None
+    except Exception:
+        return None
+
 class BERTAnalyzer:
     """BERT 기반 통합 분석기"""
     
@@ -54,6 +72,10 @@ class BERTAnalyzer:
         vul_original = Path(__file__).parents[2] / "codebert_test2" / "model" / "codebert"
         self.mal_model_path = mal_server if mal_server.exists() else mal_original
         self.vul_model_path = vul_server if vul_server.exists() else vul_original
+        
+        # CWE 라벨 로딩
+        cwe_labels_path = self.models_dir / "bert_vul" / "cwe_labels.txt"
+        self.cwe_label_names = load_labels(str(cwe_labels_path))
         
         # 모델 및 토크나이저 초기화
         self.mal_tokenizer = None
@@ -188,7 +210,26 @@ class BERTAnalyzer:
             is_vulnerable = file_probability > self.threshold
             vulnerability_status = "Vulnerable" if is_vulnerable else "Safe"
             vulnerability_label = "Vulnerable" if is_vulnerable else "Safe"
-            cwe_label = "CWE-XXX" if is_vulnerable else "Safe"
+            
+            # CWE 라벨 결정 (원본 코드 방식 참고)
+            if is_vulnerable:
+                # 모델의 id2label 확인
+                id2label = getattr(self.vul_model.config, "id2label", None)
+                if isinstance(id2label, dict):
+                    id2label = {int(k): v for k, v in id2label.items()}
+                
+                # 가장 높은 확률을 가진 클래스의 인덱스 찾기
+                max_prob_idx = np.argmax(probabilities) if probabilities else 0
+                
+                # CWE 라벨 매핑 (원본 코드의 idx_to_name 함수 로직)
+                if self.cwe_label_names and 0 <= max_prob_idx < len(self.cwe_label_names):
+                    cwe_label = self.cwe_label_names[max_prob_idx]
+                elif id2label and max_prob_idx in id2label:
+                    cwe_label = id2label[max_prob_idx]
+                else:
+                    cwe_label = f"class_{max_prob_idx}"
+            else:
+                cwe_label = "Safe"
             
             analysis_time = time.time() - start_time
             
