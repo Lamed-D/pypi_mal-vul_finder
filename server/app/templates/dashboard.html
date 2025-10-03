@@ -59,6 +59,11 @@
             border-left-color: #28a745;
             background-color: #d4edda;
         }
+        .chart-container {
+            position: relative;
+            height: 320px; /* keep chart height stable */
+            width: 100%;
+        }
     </style>
 </head>
 <body>
@@ -243,12 +248,15 @@
                         <h5><i class="fas fa-chart-pie"></i> Analysis Overview</h5>
                     </div>
                     <div class="card-body">
-                        <canvas id="analysisChart" 
+                        <div class="chart-container">
+                            <canvas id="analysisChart" 
                                 width="400" 
                                 height="400"
                                 data-safe-files="{{ stats.safe_files }}"
                                 data-malicious-files="{{ stats.malicious_files }}"
-                                data-vulnerable-files="{{ stats.vulnerable_files }}"></canvas>
+                                 data-vulnerable-files="{{ stats.vulnerable_files }}"></canvas>
+                        </div>
+                        <div class="mt-3" id="analysisLegend"></div>
                     </div>
                 </div>
             </div>
@@ -684,6 +692,13 @@
                 ];
                 analysisChart.update();
             }
+
+            // Update legend under doughnut chart with percentages
+            renderLegend(
+                stats.safe_files ?? 0,
+                stats.malicious_files ?? 0,
+                stats.vulnerable_files ?? 0
+            );
         }
 
         // View session details
@@ -773,6 +788,29 @@
                 maintainAspectRatio: false
             }
         });
+
+        // Legend renderer
+        function renderLegend(safe, mal, vul) {
+            const total = (safe || 0) + (mal || 0) + (vul || 0);
+            const pct = (n) => total > 0 ? Math.round((n / total) * 100) : 0;
+            const items = [
+                { label: 'Safe', value: safe, color: '#28a745', percent: pct(safe) },
+                { label: 'Malicious', value: mal, color: '#dc3545', percent: pct(mal) },
+                { label: 'Vulnerable', value: vul, color: '#ffc107', percent: pct(vul) }
+            ];
+            const legend = document.getElementById('analysisLegend');
+            if (!legend) return;
+            legend.innerHTML = items.map(i => `
+                <div class="d-flex align-items-center mb-1">
+                    <span style="display:inline-block;width:12px;height:12px;background:${i.color};border-radius:2px;margin-right:8px;"></span>
+                    <span class="me-2">${i.label}</span>
+                    <span class="text-muted">${i.percent}% (${i.value})</span>
+                </div>
+            `).join('');
+        }
+
+        // Initial legend render
+        renderLegend(safeFiles, maliciousFiles, vulnerableFiles);
 
         refreshDashboardData();
     </script>
