@@ -51,4 +51,4 @@ pytest -q
 필요한 ML/BERT 패키지가 설치되지 않은 경우 관련 기능은 자동으로 건너뛰거나 명확한 오류를 제공합니다.
 
 ## 참고 자료
-- 사용 동영상 가이드: https://youtu.be/xs6TBCEsrgY
+- 사용 동영상 가이드: https://youtu.be/xs6TBCEsrgY](https://youtu.be/-y6QJE9Cj4s
