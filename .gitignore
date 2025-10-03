@@ -72,7 +72,7 @@ vscode-extension/out/
 vscode-extension/*.vsix
 
 # Archives and large artifacts (압축/대용량 산출물)
-*.zip
+#*.zip
 *.tar.gz
 *.tgz
 
