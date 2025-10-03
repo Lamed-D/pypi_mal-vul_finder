@@ -1,0 +1,2 @@
+model_teach는 모델을 학습 시 사용한 것,
+final_unified는 실제 탐지 코드입니다.
