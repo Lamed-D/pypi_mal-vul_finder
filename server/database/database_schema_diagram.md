@@ -11,7 +11,7 @@
 erDiagram
     main_log {
         INTEGER id PK
-        VARCHAR session_id
+        VARCHAR session_id FK
         DATETIME upload_time
         VARCHAR filename
         INTEGER file_size
@@ -32,7 +32,7 @@ erDiagram
 
     lstm_vul {
         INTEGER id PK
-        VARCHAR session_id
+        VARCHAR session_id FK
         VARCHAR file_path
         VARCHAR file_name
         INTEGER file_size
@@ -47,7 +47,7 @@ erDiagram
 
     lstm_mal {
         INTEGER id PK
-        VARCHAR session_id
+        VARCHAR session_id FK
         VARCHAR file_path
         VARCHAR file_name
         INTEGER file_size
@@ -61,7 +61,7 @@ erDiagram
 
     lstm_vul_safe {
         INTEGER id PK
-        VARCHAR session_id
+        VARCHAR session_id FK
         VARCHAR file_path
         VARCHAR file_name
         INTEGER file_size
@@ -75,7 +75,7 @@ erDiagram
 
     lstm_mal_safe {
         INTEGER id PK
-        VARCHAR session_id
+        VARCHAR session_id FK
         VARCHAR file_path
         VARCHAR file_name
         INTEGER file_size
@@ -88,7 +88,7 @@ erDiagram
 
     bert_mal {
         INTEGER id PK
-        VARCHAR session_id
+        VARCHAR session_id FK
         VARCHAR file_path
         VARCHAR file_name
         INTEGER file_size
@@ -102,7 +102,7 @@ erDiagram
 
     bert_mal_safe {
         INTEGER id PK
-        VARCHAR session_id
+        VARCHAR session_id FK
         VARCHAR file_path
         VARCHAR file_name
         INTEGER file_size
@@ -115,7 +115,7 @@ erDiagram
 
     bert_vul {
         INTEGER id PK
-        VARCHAR session_id
+        VARCHAR session_id FK
         VARCHAR file_path
         VARCHAR file_name
         INTEGER file_size
@@ -130,7 +130,7 @@ erDiagram
 
     bert_vul_safe {
         INTEGER id PK
-        VARCHAR session_id
+        VARCHAR session_id FK
         VARCHAR file_path
         VARCHAR file_name
         INTEGER file_size
@@ -144,7 +144,7 @@ erDiagram
 
     pkg_vul_analysis {
         INTEGER id PK
-        VARCHAR session_id
+        VARCHAR session_id FK
         VARCHAR package_name
         TEXT summary
         VARCHAR author
@@ -163,25 +163,46 @@ erDiagram
         DATETIME created_at
     }
 
-    %% 관계 정의
-    main_log ||--o{ lstm_vul : "session_id"
-    main_log ||--o{ lstm_mal : "session_id"
-    main_log ||--o{ lstm_vul_safe : "session_id"
-    main_log ||--o{ lstm_mal_safe : "session_id"
-    main_log ||--o{ bert_mal : "session_id"
-    main_log ||--o{ bert_mal_safe : "session_id"
-    main_log ||--o{ bert_vul : "session_id"
-    main_log ||--o{ bert_vul_safe : "session_id"
-    main_log ||--o{ pkg_vul_analysis : "session_id"
+    %% 관계 정의 (Foreign Key Relationships)
+    main_log ||--o{ lstm_vul : "main_log.session_id = lstm_vul.session_id"
+    main_log ||--o{ lstm_mal : "main_log.session_id = lstm_mal.session_id"
+    main_log ||--o{ lstm_vul_safe : "main_log.session_id = lstm_vul_safe.session_id"
+    main_log ||--o{ lstm_mal_safe : "main_log.session_id = lstm_mal_safe.session_id"
+    main_log ||--o{ bert_mal : "main_log.session_id = bert_mal.session_id"
+    main_log ||--o{ bert_mal_safe : "main_log.session_id = bert_mal_safe.session_id"
+    main_log ||--o{ bert_vul : "main_log.session_id = bert_vul.session_id"
+    main_log ||--o{ bert_vul_safe : "main_log.session_id = bert_vul_safe.session_id"
+    main_log ||--o{ pkg_vul_analysis : "main_log.session_id = pkg_vul_analysis.session_id"
 ```
+
+## Foreign Key 관계 설명
+
+### 🔗 주요 관계
+- **main_log.session_id** → **모든 분석 결과 테이블의 session_id**
+- **관계 유형**: One-to-Many (1:N)
+- **목적**: 하나의 분석 세션에 여러 분석 결과를 연결
+
+### 📊 관계 매핑
+| 부모 테이블 | 자식 테이블 | 관계 설명 |
+|------------|------------|----------|
+| main_log | lstm_vul | LSTM 취약점 분석 결과 |
+| main_log | lstm_mal | LSTM 악성코드 분석 결과 |
+| main_log | lstm_vul_safe | LSTM 안전한 파일 (취약점 관점) |
+| main_log | lstm_mal_safe | LSTM 안전한 파일 (악성코드 관점) |
+| main_log | bert_vul | BERT 취약점 분석 결과 |
+| main_log | bert_mal | BERT 악성코드 분석 결과 |
+| main_log | bert_vul_safe | BERT 안전한 파일 (취약점 관점) |
+| main_log | bert_mal_safe | BERT 안전한 파일 (악성코드 관점) |
+| main_log | pkg_vul_analysis | ML 통합 분석 결과 |
 
 ## 테이블별 상세 설명
 
 ### 1. main_log (메인 로그 테이블)
 - **목적**: 분석 세션의 요약 정보 저장
 - **레코드 수**: 11개
+- **Primary Key**: `id`
 - **주요 필드**:
-  - `session_id`: 분석 세션 고유 식별자
+  - `session_id`: 분석 세션 고유 식별자 (FK의 참조 대상)
   - `analysis_model`: 사용된 분석 모델 (LSTM, BERT, ML)
   - `is_bert`, `is_mal`, `is_ml`: 분석 타입 플래그
   - `vul_flag`, `mal_flag`: 취약점/악성코드 탐지 여부
@@ -189,35 +210,51 @@ erDiagram
 ### 2. LSTM 분석 테이블들
 #### lstm_vul (LSTM 취약점 분석 결과)
 - **레코드 수**: 28개
+- **Primary Key**: `id`
+- **Foreign Key**: `session_id` → `main_log.session_id`
 - **목적**: LSTM 모델로 탐지된 취약한 파일 정보
 
 #### lstm_mal (LSTM 악성코드 분석 결과)
 - **레코드 수**: 94개
+- **Primary Key**: `id`
+- **Foreign Key**: `session_id` → `main_log.session_id`
 - **목적**: LSTM 모델로 탐지된 악성 파일 정보
 
 #### lstm_vul_safe (LSTM 안전한 파일 - 취약점 관점)
 - **레코드 수**: 780개
+- **Primary Key**: `id`
+- **Foreign Key**: `session_id` → `main_log.session_id`
 - **목적**: LSTM 모델로 분석했지만 취약하지 않은 파일
 
 #### lstm_mal_safe (LSTM 안전한 파일 - 악성코드 관점)
 - **레코드 수**: 714개
+- **Primary Key**: `id`
+- **Foreign Key**: `session_id` → `main_log.session_id`
 - **목적**: LSTM 모델로 분석했지만 악성이 아닌 파일
 
 ### 3. BERT 분석 테이블들
 #### bert_mal (BERT 악성코드 분석 결과)
 - **레코드 수**: 2개
+- **Primary Key**: `id`
+- **Foreign Key**: `session_id` → `main_log.session_id`
 - **목적**: BERT 모델로 탐지된 악성 파일 정보
 
 #### bert_vul (BERT 취약점 분석 결과)
 - **레코드 수**: 2개
+- **Primary Key**: `id`
+- **Foreign Key**: `session_id` → `main_log.session_id`
 - **목적**: BERT 모델로 탐지된 취약한 파일 정보
 
 #### bert_mal_safe, bert_vul_safe
 - **레코드 수**: 0개
+- **Primary Key**: `id`
+- **Foreign Key**: `session_id` → `main_log.session_id`
 - **목적**: BERT 모델로 분석했지만 안전한 파일들
 
 ### 4. pkg_vul_analysis (패키지 취약점 분석)
 - **레코드 수**: 16개
+- **Primary Key**: `id`
+- **Foreign Key**: `session_id` → `main_log.session_id`
 - **목적**: LSTM + XGBoost 통합 ML 모델 분석 결과
 - **특징**: 
   - 패키지 메타데이터 (이름, 버전, 다운로드 수 등)
@@ -267,7 +304,9 @@ flowchart TD
 
 ## 주요 특징
 1. **다중 모델 지원**: LSTM, BERT, XGBoost 모델 결과를 별도 테이블에 저장
-2. **세션 기반 관리**: session_id로 분석 세션별 데이터 그룹화
+2. **세션 기반 관리**: session_id로 분석 세션별 데이터 그룹화 (FK 관계)
 3. **안전한 파일 추적**: 문제가 없는 파일도 별도 테이블에 기록하여 전체 분석 이력 보존
 4. **통합 분석**: LSTM과 XGBoost 결과를 결합한 최종 판정 시스템
 5. **메타데이터 보존**: 파일 경로, 크기, 분석 시간 등 상세 정보 저장
+6. **정규화된 구조**: main_log를 중심으로 한 1:N 관계로 데이터 무결성 보장
+7. **Foreign Key 제약**: 모든 분석 결과 테이블이 main_log.session_id를 참조
