@@ -34,6 +34,8 @@ https://youtu.be/-y6QJE9Cj4s
 
 ## 3. 소개 영상
 
+[![PySecure 소개 영상](https://img.youtube.com/vi/uITb4-UTSNQ/0.jpg)](https://youtu.be/uITb4-UTSNQ)
+
 https://youtu.be/uITb4-UTSNQ
 
 <br>
