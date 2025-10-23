@@ -18,6 +18,11 @@
     <a href="server/pipeline.md">
         [상세 문서]
     </a>
+    <br>
+    <br>
+    <a href="https://www.notion.so/No_Mal-2546181b46c8806a8205e5e2bec913e6">
+        [팀 노션]
+    </a>
 </div>
 
 ## 1. 프로젝트 소개
