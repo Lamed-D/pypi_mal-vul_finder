@@ -566,13 +566,21 @@ function activate(context) {
             vscode.window.showInformationMessage('ML 패키지 분석을 위한 패키지 ZIP 생성 중...');
             const zipPath = await createPythonPackagesZip();
             const result = await uploadZipToEndpoint(zipPath, '/api/v1/upload/ML');
+            fs.unlinkSync(zipPath);
             const dashUrl = result?.dashboard_url || buildDashboardUrl(result?.session_id, true);
-            vscode.window.showInformationMessage(`업로드 완료 (ML 패키지)! 세션 ID: ${result.session_id}`, '대시보드 열기').then(selection => {
+            const summary = await vscode.window.withProgress({
+                location: vscode.ProgressLocation.Notification,
+                title: 'ML 패키지 분석 진행 중...',
+                cancellable: true
+            }, async (progress, token) => {
+                progress.report({ message: '분석 시작' });
+                return await waitForSessionReady(result.session_id, true, m => progress.report({ message: m }), token);
+            });
+            vscode.window.showInformationMessage(`분석 완료 (ML 패키지)! 세션 ID: ${summary.session_id}`, '대시보드 열기').then(selection => {
                 if (selection === '대시보드 열기') {
                     vscode.env.openExternal(vscode.Uri.parse(dashUrl));
                 }
             });
-            fs.unlinkSync(zipPath);
         }
         catch (error) {
             const message = error?.message ?? String(error);
