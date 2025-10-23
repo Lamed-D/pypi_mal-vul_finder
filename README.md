@@ -347,7 +347,7 @@ curl "http://127.0.0.1:8000/api/v1/stats"
 
 |모듈화 구조|API 연동|데이터 관리|
 |------|---|---|
-|<img width="388" src="사진/슬라이드25.JPG">|<img width="388" src="사진/슬라이드1.JPG">|<img width="388" src="사진/슬라이드56.JPG">|
+|<img width="388" src="사진/슬라이드25.JPG">|<img width="388" src="사진/슬라이드32.JPG">|<img width="388" src="사진/슬라이드56.JPG">|
 
 **API 연동**: RESTful API를 통한 외부 시스템 연동, FastAPI 기반 자동 문서화, WebSocket을 통한 실시간 분석 진행 상황 전송
 
