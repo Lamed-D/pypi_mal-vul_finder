@@ -42,7 +42,7 @@ PySecure는 LSTM, BERT, XGBoost 등 다양한 AI 모델을 통합하여 Python �
 
 |LSTM 취약점 분석|BERT 악성코드 분석|ML 통합 분석|
 |------|---|---|
-|<img width="388" src="사진/슬라이드28.JPG">|<img width="388" src="사진/슬라이드38.JPG">|<img width="388" src="사진/슬라이드42.JPG">|
+|<img width="500" src="사진/슬라이드28.JPG">|<img width="500" src="사진/슬라이드38.JPG">|<img width="500" src="사진/슬라이드42.JPG">|
 
 - **LSTM 기반 분석**: 코드 패턴 학습을 통한 취약점 및 악성코드 탐지
 - **BERT 기반 분석**: CodeBERT 모델을 활용한 고도화된 코드 이해 및 분석
@@ -54,7 +54,7 @@ FastAPI 기반의 직관적인 웹 인터페이스를 통해 분석 결과를 �
 
 |웹 대시보드|분석 결과|소스코드 뷰어|
 |------|---|---|
-|<img width="388" src="사진/슬라이드34.JPG">|<img width="388" src="사진/슬라이드35.JPG">|<img width="388" src="사진/슬라이드41.JPG">|
+|<img width="500" src="사진/슬라이드34.JPG">|<img width="500" src="사진/슬라이드35.JPG">|<img width="500" src="사진/슬라이드41.JPG">|
 
 - **대시보드**: 전체 분석 통계 및 최근 세션 목록
 - **분석 결과 뷰**: 취약점/악성코드별 상세 결과 표시
@@ -66,7 +66,7 @@ FastAPI 기반의 직관적인 웹 인터페이스를 통해 분석 결과를 �
 
 |VS Code 확장|커맨드 분석|실시간 피드백|
 |------|---|---|
-|<img width="388" src="사진/슬라이드47.JPG">|<img width="388" src="사진/슬라이드48.JPG">|<img width="388" src="사진/슬라이드49.JPG">|
+|<img width="500" src="사진/슬라이드47.JPG">|<img width="500" src="사진/슬라이드48.JPG">|<img width="500" src="사진/슬라이드49.JPG">|
 
 - **커맨드 분석**: VS Code에서 폴더를 ZIP으로 압축하여 서버에 업로드
 - **실시간 피드백**: 분석 결과를 VS Code 내에서 바로 확인
@@ -79,10 +79,10 @@ FastAPI 기반의 직관적인 웹 인터페이스를 통해 분석 결과를 �
 
 <table>
     <tr align="center">
-        <td><img src="사진/슬라이드5.JPG" width="350"></td>
-        <td><img src="사진/슬라이드6.JPG" width="350"></td>
-        <td><img src="사진/슬라이드7.JPG" width="350"></td>
-        <td><img src="사진/슬라이드8.JPG" width="350"></td>
+        <td><img src="사진/슬라이드5.JPG" width="700"></td>
+        <td><img src="사진/슬라이드6.JPG" width="700"></td>
+        <td><img src="사진/슬라이드7.JPG" width="700"></td>
+        <td><img src="사진/슬라이드8.JPG" width="700"></td>
     </tr>
     <tr align="center">
         <td>박은찬</td>
@@ -281,7 +281,7 @@ curl "http://127.0.0.1:8000/api/v1/stats"
 
 |취약점 분석|악성코드 탐지|위험도 평가|
 |------|---|---|
-|<img width="388" src="사진/슬라이드29.JPG">|<img width="388" src="사진/슬라이드28.JPG">|<img width="388" src="사진/슬라이드36.JPG">|
+|<img width="500" src="사진/슬라이드29.JPG">|<img width="500" src="사진/슬라이드28.JPG">|<img width="500" src="사진/슬라이드36.JPG">|
 
 #### BERT 기반 분석
 - **CodeBERT 모델**: 코드 이해에 특화된 BERT 모델 활용
@@ -367,11 +367,7 @@ curl "http://127.0.0.1:8000/api/v1/stats"
 - **지원 언어**: Python 3.8+ 모든 버전
 - **지원 플랫폼**: Windows, macOS, Linux
 
-## 12. 라이선스
-
-이 프로젝트는 MIT 라이선스 하에 배포됩니다.
-
-## 13. 기여하기
+## 12. 기여하기
 
 1. Fork the Project
 2. Create your Feature Branch (`git checkout -b feature/AmazingFeature`)
@@ -379,7 +375,7 @@ curl "http://127.0.0.1:8000/api/v1/stats"
 4. Push to the Branch (`git push origin feature/AmazingFeature`)
 5. Open a Pull Request
 
-## 14. 연락처
+## 13. 연락처
 
 프로젝트 관련 문의사항이 있으시면 이슈를 생성해 주세요.
 
