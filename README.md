@@ -5,63 +5,19 @@
 ![PySecure 프로젝트 소개](사진/슬라이드1.JPG)
 
 <div align="center">
-    <a href="발표자료/PT-SecurePy.pdf">
-        [발표자료]
-    </a>
-    <br>
-    <br>
-    <a href="데모파일/">
-        [데모파일]
-    </a>
-    <br>
-    <br>
-    <a href="교육자료/">
-        [교육자료]
-    </a>
-    <br>
-    <br>
     <a href="https://youtu.be/-y6QJE9Cj4s">
         [사용 동영상 가이드]
     </a>
     <br>
     <br>
-    파트별 자세한 내용은 각 프로젝트 디렉토리 마크다운 문서에 있습니다.
+    <a href="발표자료/PT-SecurePy.pdf">
+        [발표자료]
+    </a>
     <br>
     <br>
-    <table>
-        <tr align="center">
-            <td>
-                웹 서버
-            </td>
-            <td>
-                VS Code 확장
-            </td>
-            <td>
-                AI 분석
-            </td>
-        </tr>
-        <tr align="center">
-            <td>
-                <a href="server/pipeline.md">pipeline.md</a>
-            </td>
-            <td>
-                <a href="vscode-extension/README.md">README.md</a>
-            </td>
-            <td>
-                <a href="server/analysis/">analysis/</a>
-            </td>
-        </tr>
-    </table>
-</div>
-
-<br>
-
-<div align="center">
-    <p align="center">
-        <img src="사진/슬라이드11.JPG" width="600" height="400"/>
-    </p>
-    <br>
-    <a href="https://youtu.be/-y6QJE9Cj4s">사용 동영상 가이드</a>
+    <a href="server/pipeline.md">
+        [상세 문서]
+    </a>
 </div>
 
 ## 1. 프로젝트 소개
@@ -72,99 +28,61 @@ PySecure는 Python 코드의 악성 여부 및 취약점을 다중 AI 엔진(LST
 
 <br>
 
-## 2. Abstract
-
-This project aims to develop a comprehensive Python security analysis system that detects malicious code and vulnerabilities in Python packages using multiple AI engines (LSTM, BERT, ML). The system provides real-time analysis through a FastAPI-based dashboard and VS Code extension, helping developers write secure Python code.
-
-<br>
-
-## 3. 소개 영상
+## 2. 소개 영상
 
 https://youtu.be/-y6QJE9Cj4s
 
 <br>
 
-## 4. 프로젝트 기능
+## 3. 프로젝트 기능
 
 #### 1️⃣ 다중 AI 엔진 보안 분석
 
 PySecure는 LSTM, BERT, XGBoost 등 다양한 AI 모델을 통합하여 Python 코드의 보안 취약점과 악성코드를 탐지합니다.
 
+|LSTM 취약점 분석|BERT 악성코드 분석|ML 통합 분석|
+|------|---|---|
+|<img width="388" src="사진/슬라이드28.JPG">|<img width="388" src="사진/슬라이드38.JPG">|<img width="388" src="사진/슬라이드42.JPG">|
+
 - **LSTM 기반 분석**: 코드 패턴 학습을 통한 취약점 및 악성코드 탐지
 - **BERT 기반 분석**: CodeBERT 모델을 활용한 고도화된 코드 이해 및 분석
 - **ML 통합 분석**: LSTM + XGBoost를 결합한 패키지 메타데이터 기반 악성 탐지
-
-|LSTM 취약점 분석|BERT 악성코드 분석|ML 통합 분석|
-|------|---|---|
-|<img width="388" src="사진/슬라이드1.JPG">|<img width="388" src="사진/슬라이드1.JPG">|<img width="388" src="사진/슬라이드1.JPG">|
-<br>
 
 #### 2️⃣ 실시간 웹 대시보드
 
 FastAPI 기반의 직관적인 웹 인터페이스를 통해 분석 결과를 실시간으로 확인할 수 있습니다.
 
+|웹 대시보드|분석 결과|소스코드 뷰어|
+|------|---|---|
+|<img width="388" src="사진/슬라이드34.JPG">|<img width="388" src="사진/슬라이드35.JPG">|<img width="388" src="사진/슬라이드41.JPG">|
+
 - **대시보드**: 전체 분석 통계 및 최근 세션 목록
 - **분석 결과 뷰**: 취약점/악성코드별 상세 결과 표시
 - **소스코드 뷰어**: 파일 클릭 시 모달로 소스코드 표시
-- **반응형 디자인**: Bootstrap 5 기반 모바일 친화적 UI
-
-|웹 대시보드|분석 결과|소스코드 뷰어|
-|------|---|---|
-|<img width="388" src="사진/슬라이드1.JPG">|<img width="388" src="사진/슬라이드1.JPG">|<img width="388" src="사진/슬라이드1.JPG">|
-<br>
 
 #### 3️⃣ VS Code 확장 프로그램
 
 개발 환경에서 직접 사용할 수 있는 VS Code 확장 프로그램을 제공합니다.
 
-- **원클릭 분석**: VS Code에서 폴더를 ZIP으로 압축하여 서버에 업로드
+|VS Code 확장|커맨드 분석|실시간 피드백|
+|------|---|---|
+|<img width="388" src="사진/슬라이드47.JPG">|<img width="388" src="사진/슬라이드48.JPG">|<img width="388" src="사진/슬라이드49.JPG">|
+
+- **커맨드 분석**: VS Code에서 폴더를 ZIP으로 압축하여 서버에 업로드
 - **실시간 피드백**: 분석 결과를 VS Code 내에서 바로 확인
-- **개발자 친화적**: 기존 개발 워크플로우에 자연스럽게 통합
-
-|VS Code 확장|원클릭 분석|실시간 피드백|
-|------|---|---|
-|<img width="388" src="사진/슬라이드1.JPG">|<img width="388" src="사진/슬라이드1.JPG">|<img width="388" src="사진/슬라이드1.JPG">|
-<br>
-
-#### 4️⃣ 종합 보안 분석
-
-다양한 보안 위협을 포괄적으로 분석합니다.
-
-- **취약점 탐지**: SQL Injection, XSS, 경로 조작 등 CWE 기반 취약점 분석
-- **악성코드 탐지**: 악성 패키지, 타이포스쿼팅, 백도어 탐지
-- **메타데이터 분석**: 패키지 정보, 다운로드 수, 작성자 신뢰도 분석
-- **통합 위험도 평가**: 다중 모델 결과를 종합한 최종 위험도 산출
-
-|취약점 분석|악성코드 탐지|위험도 평가|
-|------|---|---|
-|<img width="388" src="사진/슬라이드1.JPG">|<img width="388" src="사진/슬라이드1.JPG">|<img width="388" src="사진/슬라이드1.JPG">|
-<br>
-
-#### 5️⃣ 확장 가능한 아키텍처
-
-모듈화된 구조로 새로운 분석 엔진 추가가 용이합니다.
-
-- **플러그인 아키텍처**: 새로운 AI 모델을 쉽게 통합
-- **RESTful API**: 외부 시스템과의 연동 지원
-- **데이터베이스 관리**: SQLite 기반 분석 결과 영구 저장
-- **배치 처리**: 대용량 파일의 효율적인 처리
-
-|모듈화 구조|API 연동|데이터 관리|
-|------|---|---|
-|<img width="388" src="사진/슬라이드1.JPG">|<img width="388" src="사진/슬라이드1.JPG">|<img width="388" src="사진/슬라이드1.JPG">|
 
 <br>
 
-## 5. 팀원 소개
+## 4. 팀원 소개
 
 ![팀원 소개](사진/슬라이드4.JPG)
 
 <table>
     <tr align="center">
-        <td><img src="사진/슬라이드5.JPG" width="250"></td>
-        <td><img src="사진/슬라이드6.JPG" width="250"></td>
-        <td><img src="사진/슬라이드7.JPG" width="250"></td>
-        <td><img src="사진/슬라이드8.JPG" width="250"></td>
+        <td><img src="사진/슬라이드5.JPG" width="350"></td>
+        <td><img src="사진/슬라이드6.JPG" width="350"></td>
+        <td><img src="사진/슬라이드7.JPG" width="350"></td>
+        <td><img src="사진/슬라이드8.JPG" width="350"></td>
     </tr>
     <tr align="center">
         <td>박은찬</td>
@@ -182,7 +100,7 @@ FastAPI 기반의 직관적인 웹 인터페이스를 통해 분석 결과를 �
 
 <br>
 
-## 6. 기술스택
+## 5. 기술스택
 
 ### 🛠 Backend
 
@@ -226,43 +144,61 @@ FastAPI 기반의 직관적인 웹 인터페이스를 통해 분석 결과를 �
 
 <br>
 
-## 7. 시스템 구조
+## 6. 시스템 구조
 
 ### 💻 서비스 아키텍처
 
 <br>
-<img src = "사진/슬라이드1.JPG" width=800>
+<img src = "사진/슬라이드32.JPG" width=800>
 
 ### 🤖 AI 분석 파이프라인
 
 <br>
-<img src = "사진/슬라이드1.JPG" width=900>
+<img src = "사진/슬라이드26.JPG" width=900>
 
 ### 📂 디렉토리 구조
 
 ```
-├── 📂server 🗂 FastAPI 웹 서버
+📦 PySecure 프로젝트
+├── 🔥 📂server 🗂 FastAPI 웹 서버 (핵심)
 │   ├── 📁 app/                    # FastAPI 애플리케이션
 │   ├── 📁 analysis/               # AI 분석 엔진
 │   ├── 📁 database/               # 데이터베이스 관리
 │   ├── 📁 models/                 # AI 모델 파일
 │   └── 📄 run.py                  # 서버 실행 스크립트
-├── 📂vscode-extension 🗂 VS Code 확장 프로그램
-├── 📂vscode-Python Security Analyzer 🗂 VS Code 확장 (배포용)
-├── 📂safepy_3 🗂 LSTM 취약점 분석 모델
-├── 📂safepy_3_malicious 🗂 LSTM 악성코드 분석 모델
-├── 📂safepy_3_malicious_ML 🗂 ML 통합 분석 모델
-├── 📂codebert_mal 🗂 BERT 악성코드 분석 모델
-├── 📂codebert_test2 🗂 BERT 취약점 분석 모델
-├── 📂colab_files 🗂 Jupyter 노트북 개발 파일
-├── 📂dataset 🗂 학습 데이터셋
-├── 📂데모파일 🗂 데모용 샘플 파일
-├── 📂교육자료 🗂 프로젝트 교육 자료
-├── 📂발표자료 🗂 발표용 자료
+├── 🔥 📂vscode-Python Security Analyzer 🗂 VS Code 확장 (핵심)
+│   ├── 📁 src/                    # 확장 프로그램 소스코드
+│   ├── 📄 package.json            # 확장 프로그램 설정
+│   └── 📄 python-security-analyzer-0.1.0.vsix  # 배포용 패키지
+├── 🛠️ 📂safepy_3 🗂 LSTM 취약점 분석 모델 (개발 기능)
+├── 🛠️ 📂safepy_3_malicious 🗂 LSTM 악성코드 분석 모델 (개발 기능)
+├── 🛠️ 📂safepy_3_malicious_ML 🗂 ML 통합 분석 모델 (개발 기능)
+├── 🛠️ 📂codebert_mal 🗂 BERT 악성코드 분석 모델 (개발 기능)
+├── 🛠️ 📂codebert_test2 🗂 BERT 취약점 분석 모델 (개발 기능)
+├── 🛠️ 📂colab_files 🗂 Jupyter 노트북 개발 파일 (개발 기능)
+├── 🛠️ 📂dataset 🗂 학습 데이터셋 (개발 기능)
+├── 📚 📂데모파일 🗂 데모용 샘플 파일
+├── 📚 📂교육자료 🗂 프로젝트 교육 자료
+├── 📚 📂발표자료 🗂 발표용 자료
 └── 📕README.md
 ```
 
-## 8. 사용법
+#### 🔥 핵심 구성요소
+- **server**: PySecure의 메인 웹 서버로, FastAPI 기반의 분석 엔진과 웹 인터페이스를 제공
+- **vscode-Python Security Analyzer**: VS Code에서 직접 사용할 수 있는 확장 프로그램
+
+#### 🛠️ 개발 기능들
+- **safepy_3 시리즈**: LSTM 기반 취약점 및 악성코드 분석 모델들
+- **codebert 시리즈**: BERT 기반 고도화된 코드 분석 모델들
+- **colab_files**: 모델 개발 및 실험용 Jupyter 노트북들
+- **dataset**: AI 모델 학습에 사용된 데이터셋
+
+#### 📚 참고 자료
+- **데모파일**: 시스템 테스트용 샘플 파일들
+- **교육자료**: 프로젝트 개발 과정 문서들
+- **발표자료**: 프로젝트 소개 및 발표 자료들
+
+## 7. 사용법
 
 ### 웹 서버 실행
 
@@ -343,6 +279,10 @@ curl "http://127.0.0.1:8000/api/v1/stats"
 - **악성코드 탐지**: 악성 패키지, 백도어, 타이포스쿼팅 탐지
 - **Word2Vec 임베딩**: 코드 토큰을 벡터로 변환하여 패턴 학습
 
+|취약점 분석|악성코드 탐지|위험도 평가|
+|------|---|---|
+|<img width="388" src="사진/슬라이드29.JPG">|<img width="388" src="사진/슬라이드28.JPG">|<img width="388" src="사진/슬라이드36.JPG">|
+
 #### BERT 기반 분석
 - **CodeBERT 모델**: 코드 이해에 특화된 BERT 모델 활용
 - **고도화된 분석**: 문맥을 고려한 정밀한 보안 위협 탐지
@@ -367,7 +307,7 @@ curl "http://127.0.0.1:8000/api/v1/stats"
 
 ### VS Code 확장
 
-#### 원클릭 분석
+#### 커맨드 분석
 - **폴더 압축**: 현재 작업 폴더를 ZIP으로 자동 압축
 - **서버 업로드**: FastAPI 서버로 자동 업로드
 - **결과 표시**: VS Code 내에서 분석 결과 확인
@@ -390,6 +330,12 @@ curl "http://127.0.0.1:8000/api/v1/stats"
 - **플러그인 아키텍처**: 분석 엔진 독립적 개발
 - **API 기반**: 외부 시스템과의 연동 지원
 - **마이크로서비스**: 각 분석 엔진 독립적 배포 가능
+
+|모듈화 구조|API 연동|데이터 관리|
+|------|---|---|
+|<img width="388" src="사진/슬라이드25.JPG">|<img width="388" src="사진/슬라이드1.JPG">|<img width="388" src="사진/슬라이드56.JPG">|
+
+**API 연동**: RESTful API를 통한 외부 시스템 연동, FastAPI 기반 자동 문서화, WebSocket을 통한 실시간 분석 진행 상황 전송
 
 ### 보안
 - **파일 검증**: 업로드 파일의 확장자 및 크기 제한
