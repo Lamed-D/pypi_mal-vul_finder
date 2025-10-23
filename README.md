@@ -105,7 +105,7 @@ FastAPI 기반의 직관적인 웹 인터페이스를 통해 분석 결과를 �
         <td>팀원</td>
     </tr>
     <tr align="center">
-        <td>통합, 최종데모<br>모델개발, 웹,<br>VSCODE확장</td>
+        <td>통합, 최종데모<br>개발, 웹,<br>VSCODE확장</td>
         <td>코어기능<br>ML 개발</td>
         <td>코어기능<br>BERT 개발</td>
         <td>코어기능<br>LSTM 개발</td>
